@@ -10,3 +10,5 @@
 # out/ is committed (final ROMs); intermediate build trees are not
 __pycache__/
 *.pyc
+# Variant E is built locally by scripts/build.sh, not committed
+/out/*_E_edk2_fspgop_ME_HAP_UNVERIFIED.*
