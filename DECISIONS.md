@@ -281,6 +281,12 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   coreboot tarball mirror because github.com is blocked here), plus `make iasl`. Host:
   Ubuntu 24.04 gcc/gnat 13.3.
 - The Docker SDK fallback was not needed.
+- **Arch Linux:** `scripts/setup.sh` installs packages with pacman (`gcc-ada`
+  provides GNAT), and `scripts/build-arch.sh` wraps setup + build.
+  - Verified in a clean Arch container (host GCC/GNAT 16.2.1): the crossgcc 15.2
+    toolchain and all variants A-D build.
+  - The EDK2 payload needs ImageMagick (`convert`) for the boot logo. It is now in
+    both package lists.
 
 ## D-025 EDK2 (variant C) — H
 

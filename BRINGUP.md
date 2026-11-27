@@ -246,6 +246,40 @@ scripts/gpio_check.py --dump board-data/dumps/vendor/inteltool-G.txt
 
 ## 8. Rebuilding
 
+### Arch Linux (one-shot)
+
+Run as your normal user; the script uses `sudo pacman` for missing packages.
+
+```bash
+sudo pacman -S --needed git
+```
+```bash
+git clone -b claude/dreamy-thompson-w24gzl https://github.com/oreo1298/ACoreboot.git
+```
+```bash
+cd ACoreboot
+```
+```bash
+scripts/build-arch.sh
+```
+
+- `build-arch.sh` installs the missing packages (base-devel, gcc-ada, acpica,
+  nasm, imagemagick, …) and runs `setup.sh` and `build.sh`.
+  - Build a subset with `scripts/build-arch.sh A B`.
+  - Use `MAC=xx:xx:xx:xx:xx:xx scripts/build-arch.sh` to put your MAC into the full
+    images.
+- **First run:** about 35 min and about 20 GB of disk. That covers the cross
+  toolchain plus the EDK2 checkout with all its submodules for variant C. Later runs
+  take a few minutes.
+- **Tested** in a clean Arch Linux container (bootstrap 2026.11.01, host GCC/GNAT
+  16.2.1) as a non-root user: all four variants built.
+- If pacman reports packages not found, your package database is stale. Run
+  `sudo pacman -Syu` and rerun.
+- `out/` is tracked in git, so a local rebuild shows up as modified files. Run
+  `git checkout -- out` before you `git pull` updates.
+
+### Any distribution
+
 ```bash
 scripts/setup.sh
 ```
