@@ -29,6 +29,12 @@ each value with its source and confidence. Nothing has run on hardware yet.
   - checkpatch: 0 errors / 0 warnings on all 3 patches (run with `--no-signoff`; you
     must add your own Signed-off-by)
   - `scripts/gpio_check.py`: 228 pads, 0 unexplained differences
+- **Fresh clone:** `git clone` → `scripts/setup.sh && scripts/build.sh` built the
+  toolchain and all four variants from scratch (DoD #1 verified).
+- **Independent audit:** done (`AUDIT.md`). One blocker was found and fixed: ramstage
+  would have enabled every NCT6793D logical device missing from the devicetree,
+  including the deep-sleep power controls. The SPD-provenance comment was corrected,
+  and eight nits were fixed or justified (DECISIONS.md, "Audit").
 - **Image checks:** `build.sh` asserts the descriptor, ME and GbE regions are
   byte-identical to `blobs/`. The only exception is D, which differs in exactly one
   descriptor byte.
@@ -48,9 +54,9 @@ each value with its source and confidence. Nothing has run on hardware yet.
 | Serial console COM1 0x3F8 115200 8N1 from bootblock | implemented, unverified | Super I/O identified from vendor SMBIOS + DSDT; pin-mux writes replayed from vendor PEI |
 | POST codes port 0x80 (LPC_DEBUG header) | implemented | coreboot default |
 | GPIO (all 228 pads) | from vendor GPIO table, unverified | board PEIM table, applied in bootblock |
-| DDR4, 4 slots | implemented, unverified | SPD 0x50-0x53 from FSP/vendor defaults; RCOMP from asrock/h370m (reference) |
+| DDR4, 4 slots | implemented, unverified | SPD 0x50-0x53 = standard layout and vendor config-block default (runtime vendor policy unknown); RCOMP from asrock/h370m (reference) |
 | HDMI, DP1, DP2 (libgfxinit) | implemented, unverified | DDI map from vendor VBT |
-| VGA (D-Sub via DP→VGA on DDI E) | FSP GOP only (B/C), unverified | VBT; libgfxinit not expected to work |
+| VGA (D-Sub via DP→VGA on DDI E) | FSP GOP only (B/C), unverified | VBT; libgfxinit cannot drive it on this GPU generation |
 | SATA ×6, M.2_1 (SATA/PCIe), M.2_2 | implemented, unverified | manual + SMBIOS; M.2 root ports left to FSP/straps |
 | USB 12×USB2 / 6×USB3 | implemented, unverified; OC not used | port names from SMBIOS (mapping assumed 1:1) |
 | I219-V LAN | implemented, unverified | PCH GbE + vendor GbE region |
@@ -59,6 +65,7 @@ each value with its source and confidence. Nothing has run on hardware yet.
 | PCIe clocks | all free-running, no CLKREQ# | safe default (mapping unknown) |
 | S3 | enabled (`HAVE_ACPI_RESUME`), unverified | coreboot/FSP |
 | COM2, LPT, PS/2 | implemented, unverified | vendor DSDT resources |
+| Other Super I/O LDNs (ACPI, GPIO/WDT, deep sleep, port-80 UART) | left untouched (power-on state) | not exposed by the driver |
 | Fan control / HWM | not implemented (power-on defaults) | safety rule: no vendor fan values |
 | TPM header | not implemented | — |
 | ME disable (HAP) | variant D only, location unverified on CNP-H | me_cleaner `-S` convention |
@@ -76,8 +83,8 @@ each value with its source and confidence. Nothing has run on hardware yet.
 4. **PCIe topology.** All 24 root ports are enabled and FSP prunes them. The M.2
    root ports and the GbE lane come from soft straps and were not mapped. An FSP-S
    hang or a missing NVMe would point here.
-5. **Display on A.** HDMI should work. VGA through DDI E is not expected to work with
-   libgfxinit. Use B (FSP GOP) for VGA.
+5. **Display on A.** HDMI and DP should work; VGA does not work with libgfxinit at
+   all. Use B (FSP GOP) for VGA.
 
 Also note:
 - Fans run at the Super I/O power-on default, probably full speed.
@@ -86,10 +93,18 @@ Also note:
 
 ## ROM SHA256
 
-See `out/SHA256SUMS` (final values below).
+From `out/SHA256SUMS`. A and D share the BIOS region; D differs from A only in
+descriptor byte 0x102.
 
 ```
-(filled in at the end)
+54fcc12070279b5b03925ebb2e17b766302effda7c41b9fbd823caa24bb8fddc  asus_prime-b360m-c_A_seabios_libgfxinit.rom
+2cda68b8862488f81e3e563ed6f0c2b8bd8ea1c7f76563b808dc1bcbeeaa8cdd  asus_prime-b360m-c_B_seabios_fspgop.rom
+8628f0bb502a9796a25260c42d54b85ecdf9c11c9ee80256a802213de21eaac3  asus_prime-b360m-c_C_edk2_fspgop.rom
+355cbe460f75d5e2c0e09b14ba3ad869ab01bfe9fc4d47526f4a2510e7bc3cb8  asus_prime-b360m-c_D_seabios_libgfxinit_ME_HAP_UNVERIFIED.rom
+5b3f7fed707c6870f97c93df61a90da71d8b1e5ae5d9783ed178da7a6fab7368  asus_prime-b360m-c_A_seabios_libgfxinit.bios-region.bin
+647e49f71886ff7720780d36c8f000ace4f8e18b61d783d1c8419a4f8a8fc5e2  asus_prime-b360m-c_B_seabios_fspgop.bios-region.bin
+4357c02ecf0c5a25c1b475ca8aae4f35456e9c3c96a5c43bdc6d1b1d28211dee  asus_prime-b360m-c_C_edk2_fspgop.bios-region.bin
+5b3f7fed707c6870f97c93df61a90da71d8b1e5ae5d9783ed178da7a6fab7368  asus_prime-b360m-c_D_seabios_libgfxinit_ME_HAP_UNVERIFIED.bios-region.bin
 ```
 
 ## Read first
