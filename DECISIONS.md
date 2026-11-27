@@ -168,7 +168,7 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
 - **Verify:** `inteltool -G` under vendor firmware (CLKREQ pads that are native = used),
   plus `lspci -vv` LnkCtl/L1SS.
 
-## D-013 Root ports: all 24 enabled — M
+## D-013 Root ports: all 24 enabled — M (mapping confirmed on hardware, see D-033)
 
 - **Known:** vendor SMBIOS type 9 gives PCIEX16=00:01.0, PCIEX1_1=00:1c.3 (RP4),
   PCIEX1_2=00:1c.4 (RP5), PCI slot=00:1c.5 (RP6, ASM1083 bridge).
@@ -227,7 +227,7 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   - DDI E = DP-only on AUX A, i.e. the DP-to-VGA converter feeding the D-Sub port
 - **Note:** the manual (rev 3) lists 2×DP + HDMI + D-Sub on the rear panel.
 
-## D-018 libgfxinit and VGA — M
+## D-018 libgfxinit and VGA — M (DDI E lanes fixed after hardware test, see D-031)
 
 - **Port list:** HDMI3, DP1, DP2, HDMI1, HDMI2.
 - **VGA:** not supported by libgfxinit on this GPU generation.
@@ -310,7 +310,7 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
 - The AI attribution trailer is written `Co-authored-by:` (checkpatch's preferred
   casing) in the coreboot series.
 
-## D-028 Variant D: HAP bit location on CNP-H — L/M (unverified)
+## D-028 Variant D: HAP bit location on CNP-H — **disproved on hardware, variants removed**
 
 - **Asked for:** "variant A with me_cleaner (HAP)".
 - **Blockers:**
@@ -375,3 +375,59 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
 | A-8 | NIT | gpio_check.py did not report fields coreboot writes as 0 where the vendor keeps the reset value. | **Fixed.** They are now listed per field as "assumed 0, confirm with --dump"; there are still 0 unexplained differences. |
 | A-9 | NIT | USB connector labels in the devicetree are assumptions. | **Fixed.** The comments now say so (TODO verify). |
 | A-10 | NIT | All PCIe clocks free-running. | **Kept** (D-012, the safe default). |
+
+## Hardware results (2026-11-27, variant E captures in `board-data/dumps/coreboot/2026-11-27-E/`)
+
+## D-030 HAP strap does not disable the ME; use `me_state` — H
+
+- **Observation:** with E written as a full image, so the descriptor had
+  PCHSTRP0[16] set, the ME still ran normally:
+  - HFSTS1 0x90000245: working state 5 (normal), operation mode 0 (normal).
+  - HECI 00:16.0 was present.
+- **Conclusion:** PCHSTRP0[16] is not the HAP bit on CNP-H.
+- **What changed:**
+  - D/E removed from the default build; `build.sh` builds them only with
+    `HAP_EXPERIMENT=1`.
+  - The D ROM was removed from `out/`.
+- **Replacement:** the board now has a CMOS option table. `me_state=Disable` makes
+  coreboot's CSE code send the MKHI "ME disable" request over HECI (Soft Temporary
+  Disable) and do a global reset. It's the same mechanism asrock/h370m-itx_ac uses
+  on this chipset, and it touches nothing in flash.
+- **Default:** Enable. Verify with BRINGUP §9.
+- **Your chip:** if E's descriptor is still on it, it carries the bit-16 change.
+  Flash the descriptor back from your backup (BRINGUP §2.3).
+
+## D-031 DDI E bifurcation selected — H
+
+- **Observation:** i915 logged "Not enough lanes (0) for DP on DDI E" with a WARN
+  backtrace.
+- **Cause:** coreboot sets DDI_A_4_LANES unless the board selects
+  `SOC_INTEL_GFX_ENABLE_DDI_E_BIFURCATION`. That leaves the DP-to-VGA converter on
+  DDI E without lanes.
+- **Decision:** the board selects it. The VBT already describes DDI E as a DP port.
+- **Verify:** VGA output under Linux, and no i915 warning.
+
+## D-032 HWM second I/O base and IRQ no longer written — H
+
+- **Observation:** `io 0x62 = 0` made the LPC window code print
+  "LPC IO decode base 0!".
+- **Decision:** the devicetree sets only the HWM base (0x290). The unassigned
+  resources are skipped with a notice and their registers keep their power-on
+  values, which is also one fewer write without vendor data.
+
+## D-033 PCIe and GPIO as seen on hardware — H
+
+- **Root ports kept by FSP:**
+  - RP6 → ASM1083 (PCI slot behind it)
+  - RP7 and RP8: x1, empty
+  - RP9: x4, NVMe trained at 8 GT/s x4
+  - RP21: x4, empty
+- RP1-RP5 have no lanes. So the x1 slots must be RP7/RP8, not the RP4/RP5 of the
+  vendor SMBIOS; slot descriptors moved. Which slot is which is still unconfirmed.
+- **GPIO** (`gpio_check.py --dump`): 2 of 228 pads differ.
+  - GPP_J1 becomes NF2 = CPU_C10_GATE#. FSP does this through
+    `PmcCpuC10GatePinEnable` (default on), probably the vendor's behaviour too.
+  - GPP_A12 has RXDIS set later in boot, so the pad is fully disabled.
+  - Neither is a wrongly driven output. Confirming them needs an `inteltool -G` from
+    the vendor BIOS.
+

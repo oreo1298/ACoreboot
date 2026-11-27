@@ -1,4 +1,4 @@
-From a1fb77c8a5e0b269b9c1a5d5508f08fed7ead082 Mon Sep 17 00:00:00 2001
+From b17b287972960319c1a4e7c9c31a99b773f36625 Mon Sep 17 00:00:00 2001
 From: PRIME B360M-C port <noreply@anthropic.com>
 Date: Fri, 27 Nov 2026 02:45:02 +0000
 Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C
@@ -21,35 +21,44 @@ The port is based on the vendor firmware (BIOS 3202):
   vendor firmware; RCOMP and DQ settings as on asrock/h370m-itx_ac.
 - PCIe: the CLKSRC to root port mapping is not known, so every
   reference clock runs free and CLKREQ# is not used.
+- Display: DDI E drives the DP to VGA converter, so the board selects
+  SOC_INTEL_GFX_ENABLE_DDI_E_BIFURCATION.
+- CMOS options: debug_level, power_on_after_fail and me_state;
+  me_state=Disable soft-disables the ME through HECI.
 
 Not implemented: fan control, TPM.
 
-TEST=util/abuild/abuild -t asus/b360m-c. Not tested on hardware.
+TEST=Boots Linux with the EDK2 payload and the FSP GOP. One DIMM,
+NVMe in an M.2 socket, I219-V, ALC887, USB and HDMI work.
 
 Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- Documentation/mainboard/asus/b360m-c.md      | 156 +++++++++
+ Documentation/mainboard/asus/b360m-c.md      | 169 ++++++++++
  Documentation/mainboard/index.md             |   1 +
- src/mainboard/asus/b360m-c/Kconfig           |  33 ++
+ src/mainboard/asus/b360m-c/Kconfig           |  36 +++
  src/mainboard/asus/b360m-c/Kconfig.name      |   4 +
  src/mainboard/asus/b360m-c/Makefile.mk       |  10 +
  src/mainboard/asus/b360m-c/board_info.txt    |   5 +
  src/mainboard/asus/b360m-c/bootblock.c       |  39 +++
+ src/mainboard/asus/b360m-c/cmos.default      |   4 +
+ src/mainboard/asus/b360m-c/cmos.layout       |  47 +++
  src/mainboard/asus/b360m-c/data.vbt          | Bin 0 -> 4449 bytes
- src/mainboard/asus/b360m-c/devicetree.cb     | 172 ++++++++++
+ src/mainboard/asus/b360m-c/devicetree.cb     | 173 ++++++++++
  src/mainboard/asus/b360m-c/dsdt.asl          |  27 ++
  src/mainboard/asus/b360m-c/gma-mainboard.ads |  23 ++
  src/mainboard/asus/b360m-c/gpio.c            | 321 +++++++++++++++++++
  src/mainboard/asus/b360m-c/hda_verb.c        |  47 +++
  src/mainboard/asus/b360m-c/include/gpio.h    |   8 +
  src/mainboard/asus/b360m-c/romstage.c        |  32 ++
- 15 files changed, 878 insertions(+)
+ 17 files changed, 946 insertions(+)
  create mode 100644 Documentation/mainboard/asus/b360m-c.md
  create mode 100644 src/mainboard/asus/b360m-c/Kconfig
  create mode 100644 src/mainboard/asus/b360m-c/Kconfig.name
  create mode 100644 src/mainboard/asus/b360m-c/Makefile.mk
  create mode 100644 src/mainboard/asus/b360m-c/board_info.txt
  create mode 100644 src/mainboard/asus/b360m-c/bootblock.c
+ create mode 100644 src/mainboard/asus/b360m-c/cmos.default
+ create mode 100644 src/mainboard/asus/b360m-c/cmos.layout
  create mode 100644 src/mainboard/asus/b360m-c/data.vbt
  create mode 100644 src/mainboard/asus/b360m-c/devicetree.cb
  create mode 100644 src/mainboard/asus/b360m-c/dsdt.asl
@@ -61,17 +70,18 @@ Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
 
 diff --git a/Documentation/mainboard/asus/b360m-c.md b/Documentation/mainboard/asus/b360m-c.md
 new file mode 100644
-index 00000000..f426ad50
+index 00000000..8d2838bb
 --- /dev/null
 +++ b/Documentation/mainboard/asus/b360m-c.md
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,169 @@
 +# ASUS PRIME B360M-C
 +
 +This page describes how to run coreboot on the [ASUS PRIME B360M-C].
 +
-+```{warning}
-+This port has not been tested on hardware yet. Everything below describes
-+what is implemented, not what is known to work.
++```{note}
++Tested with the EDK2 payload and the FSP GOP: boots Linux with one DIMM, NVMe
++in an M.2 socket, I219-V LAN, ALC887 audio, USB and HDMI. Everything else
++below is implemented but not yet tested.
 +```
 +
 +## Technology
@@ -193,7 +203,9 @@ index 00000000..f426ad50
 +
 +libgfxinit does not support the DP to VGA converter on DDI E on this
 +generation (the same is documented for the ASRock H110M-DVS), so the D-Sub
-+port only works with the FSP GOP.
++port only works with the FSP GOP. The board selects
++`SOC_INTEL_GFX_ENABLE_DDI_E_BIFURCATION` so that DDI E keeps its two lanes for
++the operating system's driver.
 +
 +## Super I/O
 +
@@ -201,6 +213,16 @@ index 00000000..f426ad50
 +firmware's Super I/O PEI module and enables UART A at 0x3f8 for the console
 +(COM1 header). The hardware monitor is left at its power-on defaults apart from
 +its base address (0x290), so there is no fan control.
++
++## Intel ME
++
++The ME can be soft-disabled through HECI with the `me_state` CMOS option:
++
++```bash
++nvramtool -w me_state=Disable
++```
++
++coreboot sends the request on the next boot and performs a global reset.
 +
 +## Implemented, untested
 +
@@ -235,22 +257,25 @@ index 0b0d52c7..da0fc41c 100644
  
 diff --git a/src/mainboard/asus/b360m-c/Kconfig b/src/mainboard/asus/b360m-c/Kconfig
 new file mode 100644
-index 00000000..9ad70c1e
+index 00000000..e5c6979d
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/Kconfig
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,36 @@
 +## SPDX-License-Identifier: GPL-2.0-only
 +
 +config BOARD_ASUS_B360M_C
 +	select BOARD_ROMSIZE_KB_16384
 +	select HAVE_ACPI_RESUME
 +	select HAVE_ACPI_TABLES
++	select HAVE_CMOS_DEFAULT
++	select HAVE_OPTION_TABLE
 +	select INTEL_GMA_HAVE_VBT
 +	select MAINBOARD_HAS_LIBGFXINIT
 +	select MAINBOARD_USES_IFD_GBE_REGION
 +	select SOC_INTEL_CANNONLAKE_PCH_H
 +	select SOC_INTEL_COFFEELAKE
 +	select SOC_INTEL_COMMON_BLOCK_HDA_VERB
++	select SOC_INTEL_GFX_ENABLE_DDI_E_BIFURCATION	# DDI E drives the DP-to-VGA converter
 +	select SUPERIO_NUVOTON_COMMON_COM_A
 +	select SUPERIO_NUVOTON_NCT6793D
 +
@@ -354,6 +379,69 @@ index 00000000..a41c1d93
 +	/* The vendor firmware applies its GPIO table early in PEI, too. */
 +	mainboard_configure_gpios();
 +}
+diff --git a/src/mainboard/asus/b360m-c/cmos.default b/src/mainboard/asus/b360m-c/cmos.default
+new file mode 100644
+index 00000000..8b1b689a
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/cmos.default
+@@ -0,0 +1,4 @@
++boot_option=Fallback
++debug_level=Debug
++power_on_after_fail=Disable
++me_state=Enable
+diff --git a/src/mainboard/asus/b360m-c/cmos.layout b/src/mainboard/asus/b360m-c/cmos.layout
+new file mode 100644
+index 00000000..0a5be08c
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/cmos.layout
+@@ -0,0 +1,47 @@
++## SPDX-License-Identifier: GPL-2.0-only
++
++entries
++
++0	384	r	0	reserved_memory
++
++# RTC_BOOT_BYTE (coreboot hardcoded)
++384	1	e	4	boot_option
++388	4	h	0	reboot_counter
++
++# RTC_CLK_ALTCENTURY
++400	8	r	0	century
++
++# coreboot config options: southbridge
++409	2	e	7	power_on_after_fail
++
++412	4	e	6	debug_level
++416	1	e	2	me_state
++417	3	h	0	me_state_counter
++
++984	16	h	0	check_sum
++
++enumerations
++
++2	0	Enable
++2	1	Disable
++
++4	0	Fallback
++4	1	Normal
++
++6	0	Emergency
++6	1	Alert
++6	2	Critical
++6	3	Error
++6	4	Warning
++6	5	Notice
++6	6	Info
++6	7	Debug
++6	8	Spew
++
++7	0	Disable
++7	1	Enable
++7	2	Keep
++
++checksums
++
++checksum 408 983 984
 diff --git a/src/mainboard/asus/b360m-c/data.vbt b/src/mainboard/asus/b360m-c/data.vbt
 new file mode 100644
 index 0000000000000000000000000000000000000000..83b5e50f2eadd5ed2db4276f7c634ae0d7304325
@@ -392,10 +480,10 @@ HcmV?d00001
 
 diff --git a/src/mainboard/asus/b360m-c/devicetree.cb b/src/mainboard/asus/b360m-c/devicetree.cb
 new file mode 100644
-index 00000000..1d5c9810
+index 00000000..150841f6
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/devicetree.cb
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,173 @@
 +## SPDX-License-Identifier: GPL-2.0-only
 +
 +chip soc/intel/cannonlake
@@ -484,27 +572,30 @@ index 00000000..1d5c9810
 +			}"
 +		end
 +
-+		# Root ports are assigned to HSIO lanes by the soft straps. Only the
-+		# slots below are known (vendor SMBIOS type 9); the others are left
-+		# enabled so that FSP can train whatever the straps assign to them
-+		# (e.g. the M.2 sockets) and disable the rest.
++		# Root ports are assigned to HSIO lanes by the soft straps. On hardware
++		# FSP keeps RP6 (ASM1083), RP7, RP8 (x1), RP9 and RP21 (x4, the two
++		# M.2 sockets) and disables the rest; all are left enabled here so
++		# that FSP decides from the straps.
 +		device ref pcie_rp1 on end
 +		device ref pcie_rp2 on end
 +		device ref pcie_rp3 on end
-+		device ref pcie_rp4 on
-+			register "PcieRpSlotImplemented[3]" = "true"
++		device ref pcie_rp4 on end
++		device ref pcie_rp5 on end
++		device ref pcie_rp6 on end	# ASMedia ASM1083 PCIe to PCI bridge
++		# The vendor SMBIOS names RP4/RP5 for the x1 slots, but those ports
++		# have no lanes on hardware; RP7/RP8 are the remaining x1 ports.
++		# TODO: confirm which slot is which with a card.
++		device ref pcie_rp7 on
++			register "PcieRpSlotImplemented[6]" = "true"
 +			smbios_slot_desc "SlotTypePciExpressGen3X1" "SlotLengthShort"
 +				"PCIEX1_1" "SlotDataBusWidth1X"
 +		end
-+		device ref pcie_rp5 on
-+			register "PcieRpSlotImplemented[4]" = "true"
++		device ref pcie_rp8 on
++			register "PcieRpSlotImplemented[7]" = "true"
 +			smbios_slot_desc "SlotTypePciExpressGen3X1" "SlotLengthShort"
 +				"PCIEX1_2" "SlotDataBusWidth1X"
 +		end
-+		device ref pcie_rp6 on end	# ASMedia ASM1083 PCIe to PCI bridge
-+		device ref pcie_rp7 on end
-+		device ref pcie_rp8 on end
-+		device ref pcie_rp9 on end
++		device ref pcie_rp9 on end	# M.2 socket, x4 (NVMe trained at 8 GT/s x4)
 +		device ref pcie_rp10 on end
 +		device ref pcie_rp11 on end
 +		device ref pcie_rp12 on end
@@ -516,7 +607,7 @@ index 00000000..1d5c9810
 +		device ref pcie_rp18 on end
 +		device ref pcie_rp19 on end
 +		device ref pcie_rp20 on end
-+		device ref pcie_rp21 on end
++		device ref pcie_rp21 on end	# M.2 socket, x4
 +		device ref pcie_rp22 on end
 +		device ref pcie_rp23 on end
 +		device ref pcie_rp24 on end
@@ -552,8 +643,6 @@ index 00000000..1d5c9810
 +						# control registers keep their power-on defaults.
 +						device pnp 2e.b on
 +							io  0x60 = 0x290
-+							io  0x62 = 0
-+							irq 0x70 = 0
 +						end
 +						device pnp 2e.e off end	# CIR wake-up
 +					end

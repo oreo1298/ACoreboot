@@ -3,10 +3,10 @@
 A coreboot port for the ASUS PRIME B360M-C (Intel B360 / Coffee Lake-S), with build
 scripts and ready-made ROMs.
 
-> **Hardware status:** variants C (EDK2 + FSP GOP) and E (C + ME-disable bit) boot
-> and work on the owner's board (2026-11-27). Not yet confirmed: whether E's HAP
-> bit really disables the ME, and the per-feature checks. A, B and D are untested. Read [BRINGUP.md](BRINGUP.md) before flashing: back up
-> the chip, flash the BIOS region only, and watch the COM1 serial console.
+> **Hardware status:** variant C (EDK2 + FSP GOP) boots Linux on the owner's board,
+> with NVMe, LAN, audio, USB and HDMI working (2026-11-27). A and B are untested.
+> Read [BRINGUP.md](BRINGUP.md) before flashing: back up the chip, flash the BIOS
+> region only, and watch the COM1 serial console.
 
 ## Build on Arch Linux
 
@@ -55,16 +55,13 @@ packages with apt or pacman.
 
 | Variant | Payload | Display | Use |
 |---|---|---|---|
-| A | SeaBIOS | libgfxinit (HDMI, DP) | first boot |
-| B | SeaBIOS | FSP GOP (HDMI, DP, VGA) | display fallback, VGA |
-| C | EDK2 (UEFI) | FSP GOP | UEFI boot |
-| D | = A | = A | A with the ME disabled (HAP bit; unverified on this chipset) |
-| E | = C | = C | C with the ME disabled (HAP bit; unverified on this chipset) |
+| A | SeaBIOS | libgfxinit (HDMI, DP) | legacy boot |
+| B | SeaBIOS | FSP GOP (HDMI, DP, VGA) | legacy boot with VGA |
+| C | EDK2 (UEFI) | FSP GOP (HDMI, DP, VGA) | UEFI boot, **tested** |
 
-- Start with A, then C, then D, then E.
-- D and E change only one descriptor bit. Flash them as descriptor + BIOS region
-  (BRINGUP.md §2.3), so your own ME and MAC stay.
-- E is built locally and not committed.
+- **To disable the Intel ME**, set the `me_state` CMOS option (BRINGUP.md §9). It
+  works with any variant and can be undone.
+- The former D/E "HAP" variants were removed: the ME ran normally with them.
 
 ## Documents
 

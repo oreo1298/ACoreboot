@@ -5,7 +5,7 @@
 # checkout with the patches, crossgcc toolchain, blobs and all ROM variants.
 # Run from the repository root as your normal user:
 #
-#   scripts/build-arch.sh          build A B C D E
+#   scripts/build-arch.sh          build A B C
 #   scripts/build-arch.sh A B      build only A and B
 #   MAC=xx:xx:xx:xx:xx:xx scripts/build-arch.sh   put your MAC into the GbE region
 #

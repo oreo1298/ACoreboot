@@ -3,20 +3,21 @@ Name                           Offset     Type           Size   Comp
 cbfs_master_header             0x0        cbfs header        32 none
 cpu_microcode_blob.bin         0x80       microcode      424960 none
 intel_fit                      0x67cc0    intel_fit          80 none
-fallback/romstage              0x67d40    stage           73224 none
-fallback/ramstage              0x79bc0    stage          119413 LZMA (263836 decompressed)
-vgaroms/seavgabios.bin         0x96ec0    raw             28672 none
-config                         0x9df00    raw              4084 LZMA (14817 decompressed)
-revision                       0x9ef40    raw               762 none
-build_info                     0x9f280    raw                91 none
-fallback/dsdt.aml              0x9f300    raw              8677 none
-vbt.bin                        0xa1540    raw              1171 LZMA (4449 decompressed)
-payload_revision               0xa1a40    raw               237 none
-(empty)                        0xa1b80    null             1060 none
-fspm.bin                       0xa1fc0    fsp            557056 none
-fsps.bin                       0x12a000   fsp            179155 LZMA (217088 decompressed)
-fallback/postcar               0x155c40   stage           23560 none
-fallback/payload               0x15b8c0   simple elf      72693 none
-payload_config                 0x16d500   raw              1710 none
-(empty)                        0x16dc00   null         10978212 none
+fallback/romstage              0x67d40    stage           74184 none
+fallback/ramstage              0x79f80    stage          122473 LZMA (271936 decompressed)
+vgaroms/seavgabios.bin         0x97e40    raw             28672 none
+config                         0x9ee80    raw              4118 LZMA (15022 decompressed)
+revision                       0x9ff00    raw               762 none
+build_info                     0xa0240    raw                91 none
+fallback/dsdt.aml              0xa02c0    raw              8677 none
+vbt.bin                        0xa2500    raw              1171 LZMA (4449 decompressed)
+cmos.default                   0xa2a00    cmos_default      256 none
+cmos_layout.bin                0xa2b40    cmos_layout       776 none
+payload_revision               0xa2e80    raw               237 none
+fspm.bin                       0xa2fc0    fsp            557056 none
+fsps.bin                       0x12b000   fsp            179155 LZMA (217088 decompressed)
+fallback/postcar               0x156c40   stage           24436 none
+fallback/payload               0x15cc00   simple elf      72693 none
+payload_config                 0x16e840   raw              1710 none
+(empty)                        0x16ef40   null         10973284 none
 bootblock                      0xbe5fc0   bootblock       36864 none

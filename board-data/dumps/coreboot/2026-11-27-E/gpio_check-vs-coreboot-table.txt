@@ -1,0 +1,4 @@
+gpio_check: 228 pads in build/A/bootblock/mainboard/asus/b360m-c/gpio.o, reference board-data/dumps/coreboot/2026-11-27-E/inteltool-G.txt
+  UNEXPLAINED: GPP_A12 DW0 RXDIS: coreboot 0x84000100, dump 0x84000300
+  UNEXPLAINED: GPP_J1 DW0 PMODE: coreboot 0x84000100, dump 0x84000900
+gpio_check: 0 explained (pad, field) items, 2 unexplained differences

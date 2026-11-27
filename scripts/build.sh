@@ -3,15 +3,16 @@
 #
 # Build the ASUS PRIME B360M-C coreboot variants into out/.
 #
-#   scripts/build.sh            build A B C D E
+#   scripts/build.sh            build A B C
 #   scripts/build.sh A B        build only A and B
 #
 #   A  SeaBIOS + libgfxinit                (primary first-boot image)
 #   B  SeaBIOS + FSP GOP                   (display fallback, VGA)
 #   C  EDK2 (coreboot default fork) + FSP GOP   (needs GitHub access)
-#   D  A + HAP bit, me_cleaner -S equivalent (modifies the IFD HAP strap!
-#      location unverified on CNP-H, see DECISIONS.md D-028)
-#   E  C + HAP bit (same strap change as D, on the EDK2 image)
+#   D  A + PCHSTRP0[16] ("HAP", me_cleaner -S equivalent)   } NOT recommended: on
+#   E  C + PCHSTRP0[16]                                      } hardware this bit did
+#      not disable the ME (DECISIONS.md D-028). Built only with HAP_EXPERIMENT=1.
+#      To disable the ME use the me_state CMOS option instead (BRINGUP.md §9).
 #
 # Every variant produces:
 #   out/<name>.rom              full 16 MiB image (IFD + GbE + ME + BIOS)
@@ -31,7 +32,7 @@ OUT="$TOP/out"
 JOBS="${JOBS:-$(nproc)}"
 TOOLCHAIN="$(cat "$TOP/logs/toolchain-method" 2>/dev/null || echo crossgcc)"
 BOARD=asus_prime-b360m-c
-VARIANTS="${*:-A B C D E}"
+VARIANTS="${*:-A B C}"
 
 declare -A CFG=(
 	[A]=A_seabios_libgfxinit
@@ -102,6 +103,9 @@ for v in $VARIANTS; do
 	[ -n "${CFG[$v]:-}" ] || die "unknown variant $v"
 	n="${NAME[$v]}"
 	if [ -n "${HAPBASE[$v]:-}" ]; then
+		[ "${HAP_EXPERIMENT:-0}" = 1 ] ||
+			die "$v sets PCHSTRP0[16], which did not disable the ME on hardware" \
+			    "(DECISIONS.md D-028). Use me_state instead, or HAP_EXPERIMENT=1."
 		# HAP variant: the base variant's image with only the HAP strap set
 		b="${HAPBASE[$v]}"
 		if [ -f "$OUT/${NAME[$b]}.SKIPPED.txt" ] && [ ! -f "$TOP/build/$b/coreboot.rom" ]; then

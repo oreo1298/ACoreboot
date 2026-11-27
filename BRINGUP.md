@@ -28,27 +28,16 @@ Values marked *(verify)* are not from your board; DECISIONS.md has the details.
 | `asus_prime-b360m-c_A_seabios_libgfxinit.rom` | SeaBIOS | libgfxinit (HDMI, DP1, DP2) | full 16 MiB: vendor IFD + ME + GbE from the capsule | **first boot** |
 | `asus_prime-b360m-c_B_seabios_fspgop.rom` | SeaBIOS | Intel FSP GOP (VBT-driven, includes VGA) | same | display fallback; VGA |
 | `asus_prime-b360m-c_C_edk2_fspgop.rom` | EDK2 UefiPayloadPkg (coreboot default, MrChromebox fork) | FSP GOP | same | UEFI boot |
-| `asus_prime-b360m-c_D_seabios_libgfxinit_ME_HAP_UNVERIFIED.rom` | = A | = A | A + **HAP strap bit set** (PCHSTRP0[16]) | ME disable, test last |
-| `asus_prime-b360m-c_E_edk2_fspgop_ME_HAP_UNVERIFIED.rom` | = C | = C | C + the same HAP bit | UEFI with ME disabled; after C and D work. Not committed: built by `scripts/build-arch.sh` / `build.sh` |
 | `*.bios-region.bin` | | | the 13 MiB BIOS region (0x300000-0xFFFFFF) of the same ROM | layout-based flashing |
 | `*.cbfs.txt`, `*.ifd.txt`, `*.config` | | | CBFS listing, descriptor dump, full .config | reference |
 
 - Every ROM uses the console on COM1 at 115200 8N1, POST codes on port 0x80 and
   log level 7 (DEBUG).
 - A, B and C carry the vendor descriptor byte-for-byte (`build.sh` checks it).
-  D differs from A, and E from C, in exactly one byte: descriptor offset 0x102,
-  bit 0 (PCHSTRP0 bit 16). Their BIOS regions are identical to A and C.
-- **D and E:** the HAP bit lives in the descriptor, so a BIOS-region-only flash of
-  D or E is just A or C. Flash them as in §2.3.
-- **Why "UNVERIFIED":** coreboot's me_cleaner cannot parse CSME 12 images, and
-  coreboot's ifdtool does not know the HAP location on Cannon Point. D and E use
-  PCHSTRP0 bit 16, where me_cleaner puts HAP for every ME >= 11 (confirmed on
-  100/200-series).
-  - Worst expected outcome: no boot or ME errors. Recovery: reflash A or your dump
-    with the programmer.
-  - Test D only after A boots, and E only after C and D work. "HAP works" means
-    `lspci` no longer shows the HECI device (00:16.0) and coreboot's log reports
-    the ME as disabled / not in normal operation.
+- **C is hardware-tested:** it boots Linux with NVMe, LAN, audio, USB and HDMI working.
+- **The former D/E variants are gone.** They set PCHSTRP0 bit 16 ("HAP"), and on
+  hardware the ME still ran normally, so that bit is not HAP on this chipset. To
+  disable the ME, use the `me_state` option (§9) instead.
 
 ## 2. Flashing
 
@@ -102,25 +91,20 @@ dump:
 MAC=xx:xx:xx:xx:xx:xx scripts/build.sh A
 ```
 
-### 2.3 ME disabled (D, E): descriptor + BIOS region
+### 2.3 Restoring your own descriptor and GbE (MAC)
 
-Writing only the descriptor and BIOS regions applies the HAP bit and keeps your
-own ME and GbE (your MAC). First check that your board's descriptor is the one
-these ROMs were built from:
-
-```bash
-cmp <(head -c 4096 backup1.bin) blobs/descriptor.bin
-```
-
-No output means identical. Then:
+After a full-image flash, the chip holds the capsule's descriptor and GbE region.
+Your board then shows the placeholder MAC `88:88:88:88:87:88`. To put your own
+regions back from your backup, keeping the coreboot BIOS region:
 
 ```bash
-flashrom -p ch341a_spi --ifd -i fd -i bios -w out/asus_prime-b360m-c_E_edk2_fspgop_ME_HAP_UNVERIFIED.rom
+flashrom -p ch341a_spi --ifd -i fd -i gbe -w backup1.bin
 ```
 
-If `cmp` reports differences, put your backup into `board-data/vendor/` and rerun
-`scripts/build-arch.sh`, so D and E are built from your own descriptor. To undo
-HAP, flash A or C the same way (`--ifd -i fd -i bios`), or restore the backup.
+- `--ifd` takes the layout from the chip; `-i fd -i gbe` writes only those two
+  regions, taken from `backup1.bin`.
+- Without a backup, set the MAC from the board sticker instead: build with
+  `MAC=xx:xx:xx:xx:xx:xx`, then flash with `--ifd -i gbe`.
 
 ### 2.4 Restore
 
@@ -312,7 +296,7 @@ scripts/build-arch.sh
   toolchain plus the EDK2 checkout with all its submodules for variant C. Later runs
   take a few minutes.
 - **Tested** in a clean Arch Linux container (bootstrap 2026.11.01, host GCC/GNAT
-  16.2.1) as a non-root user: all four variants built.
+  16.2.1) as a non-root user: all variants built.
 - If pacman reports packages not found, your package database is stale. Run
   `sudo pacman -Syu` and rerun.
 - `out/` is tracked in git, so a local rebuild shows up as modified files. Run
@@ -329,7 +313,7 @@ scripts/build.sh
 
 - `setup.sh` is idempotent: coreboot at the pinned commit, patches applied,
   toolchain, blobs.
-- `build.sh` builds A B C D into `out/` and checks IFD/ME/GbE and CBFS. Build a
+- `build.sh` builds A B C into `out/` and checks IFD/ME/GbE and CBFS. Build a
   subset with e.g. `scripts/build.sh A B`.
 - Change board code in `coreboot/src/mainboard/asus/b360m-c/` and commit there,
   then regenerate the series:
@@ -339,3 +323,34 @@ scripts/build.sh
 - GPIO table from a real dump: run `util/intelp2m -p cnl-h -file inteltool-G.txt`
   and feed its output to `scripts/gen_gpio_c.py`, as the current table was made.
   `gen_gpio_c.py` takes ownership from `gpio_vendor_expected.json`.
+
+## 9. Disabling the ME (`me_state`)
+
+coreboot can ask the ME to switch itself off over HECI (Intel's "Soft Temporary
+Disable"). It doesn't touch the flash descriptor and can be undone. The setting is
+a CMOS option.
+
+1. Build `nvramtool` from the checkout:
+   ```bash
+   make -C coreboot/util/nvramtool
+   ```
+2. Set the option:
+   ```bash
+   sudo coreboot/util/nvramtool/nvramtool -w me_state=Disable
+   ```
+3. Reboot. coreboot sends the request and does a full (global) reset, so the
+   board resets once more by itself.
+4. Check the result:
+   ```bash
+   lspci -s 00:16.0
+   ```
+   No output means the ME interface is gone.
+   ```bash
+   sudo coreboot/util/cbmem/cbmem -c | grep 'ME:'
+   ```
+   The "Current Operation Mode" should no longer be 0.
+
+- Undo with `me_state=Enable` and a reboot.
+- Clearing CMOS (CLRTC) restores the default (Enable).
+- `me_state_counter` stops retry loops if the ME refuses the change three times.
+

@@ -3,18 +3,20 @@ Name                           Offset     Type           Size   Comp
 cbfs_master_header             0x0        cbfs header        32 none
 cpu_microcode_blob.bin         0x80       microcode      424960 none
 intel_fit                      0x67cc0    intel_fit          80 none
-fallback/romstage              0x67d40    stage           73224 none
-fallback/ramstage              0x79bc0    stage          121796 LZMA (271632 decompressed)
-config                         0x97800    raw              4243 LZMA (15208 decompressed)
-revision                       0x98900    raw               762 none
-build_info                     0x98c40    raw                91 none
-fallback/dsdt.aml              0x98cc0    raw              8677 none
-(empty)                        0x9af00    null              164 none
-fspm.bin                       0x9afc0    fsp            557056 none
-fsps.bin                       0x123000   fsp            179155 LZMA (217088 decompressed)
-vbt.bin                        0x14ec40   raw              1171 LZMA (4449 decompressed)
-fallback/postcar               0x14f140   stage           23560 none
-fallback/payload               0x154dc0   simple elf    1815078 none
-efi/logo.bmp                   0x310040   raw            150454 none
-(empty)                        0x334c40   null          8590180 none
+fallback/romstage              0x67d40    stage           74184 none
+fallback/ramstage              0x79f80    stage          124597 LZMA (278196 decompressed)
+config                         0x986c0    raw              4285 LZMA (15413 decompressed)
+revision                       0x997c0    raw               762 none
+build_info                     0x99b00    raw                91 none
+fallback/dsdt.aml              0x99b80    raw              8677 none
+cmos.default                   0x9bdc0    cmos_default      256 none
+(empty)                        0x9bf00    null              164 none
+fspm.bin                       0x9bfc0    fsp            557056 none
+fsps.bin                       0x124000   fsp            179155 LZMA (217088 decompressed)
+vbt.bin                        0x14fc40   raw              1171 LZMA (4449 decompressed)
+cmos_layout.bin                0x150140   cmos_layout       776 none
+fallback/postcar               0x150480   stage           24436 none
+fallback/payload               0x156440   simple elf    1815078 none
+efi/logo.bmp                   0x3116c0   raw            150454 none
+(empty)                        0x3362c0   null          8584420 none
 bootblock                      0xb65fc0   bootblock       36864 none

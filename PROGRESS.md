@@ -55,3 +55,11 @@ restores ./coreboot with the patch series applied.
 - coreboot tree: branch asus-prime-b360m-c in ./coreboot, commits on top of c49935a4; regenerate
   patches with `git -C coreboot format-patch -o ../patches c49935a4`.
 - git to github.com works through the proxy (web pages 403); EDK2 clone is ~6+ GB.
+
+## Hardware phase (2026-11-27)
+- [x] C and E boot on the board (owner). Captures: board-data/dumps/coreboot/2026-11-27-E/
+- [x] Findings applied: DDI E bifurcation, HWM IO1 not assigned, x1 slot labels → RP7/RP8,
+      HAP disproved → D/E removed, me_state CMOS option added (DECISIONS D-030..D-033)
+- [ ] Owner: restore own descriptor+GbE from backup (MAC), test me_state=Disable, VGA,
+      per-slot DIMM test, x1 slot cards, DP, S3 (BRINGUP §6)
+
