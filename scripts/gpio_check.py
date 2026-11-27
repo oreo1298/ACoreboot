@@ -176,20 +176,25 @@ def main():
             if nd:
                 unexplained.append("%s DW%d %s: set by vendor, not writable by coreboot" %
                                    (name, reg, field_names(reg, nd)))
-            extra = cmask & ~vmask & (cbv ^ (e["synthetic_dw%d" % reg] if reg == 0 else ref))
-            extra_set = cmask & ~vmask & cbv
-            for bits in (extra | extra_set,):
-                if not bits:
+            # Fields coreboot writes that the vendor table leaves at their
+            # reset value. Non-zero writes need an explanation; zero writes
+            # assume a reset value of 0 and are listed so a real dump can
+            # confirm them (--dump compares them against the hardware).
+            for fname, freg, fm in FIELDS:
+                if freg != reg or not (fm & cmask & ~vmask):
                     continue
-                for fname, freg, fm in FIELDS:
-                    if freg != reg or not (fm & bits):
-                        continue
+                written = cbv & fm & cmask
+                if written:
                     why = explain_vendor(name, e, reg, fm, cbv)
                     if why:
                         explained.append("%s DW%d %s: %s" % (name, reg, fname, why))
                     else:
                         unexplained.append("%s DW%d %s: coreboot writes 0x%x, vendor leaves "
-                                           "reset value" % (name, reg, fname, cbv & fm))
+                                           "reset value" % (name, reg, fname, written))
+                else:
+                    explained.append("%s DW%d %s: coreboot writes 0 where the vendor keeps the "
+                                     "reset value (assumed 0, confirm with --dump)"
+                                     % (name, reg, fname))
         if e["own"] and e["own"] != own:
             unexplained.append("%s HOSTSW_OWN: coreboot %s, vendor %s" % (name, own, e["own"]))
         if not e["own"] and own != "ACPI":
@@ -207,15 +212,18 @@ def main():
     print("gpio_check: %d pads in %s, reference %s" % (len(table), os.path.relpath(gpio_o, TOP), ref))
     cats = {}
     for x in explained:
-        key = x.split(": ", 1)[1]
-        cats.setdefault(key, []).append(x.split(":")[0])
-    for k, v in sorted(cats.items()):
-        print("  explained (%d pads): %s" % (len(v), k))
+        head, reason = x.split(": ", 1)
+        parts = head.split()
+        pad, field = parts[0], " ".join(parts[1:]) or "-"
+        cats.setdefault((field, reason), []).append(pad)
+    for (field, reason), pads in sorted(cats.items()):
+        print("  explained %-16s %3d pads: %s" % (field, len(pads), reason))
         if a.verbose:
-            print("    " + " ".join(v))
+            print("    " + " ".join(pads))
     for x in unexplained:
         print("  UNEXPLAINED: " + x)
-    print("gpio_check: %d explained, %d unexplained differences" % (len(explained), len(unexplained)))
+    print("gpio_check: %d explained (pad, field) items, %d unexplained differences" %
+          (len(explained), len(unexplained)))
     return 1 if unexplained else 0
 
 

@@ -35,7 +35,8 @@ Values marked *(verify)* are not from your board; DECISIONS.md has the details.
 - Every ROM uses the console on COM1 at 115200 8N1, POST codes on port 0x80 and
   log level 7 (DEBUG).
 - A, B and C carry the vendor descriptor byte-for-byte (`build.sh` checks it). D
-  differs from A in exactly one byte: 0x103, bit 0.
+  differs from A in exactly one byte: descriptor offset 0x102, bit 0
+  (PCHSTRP0 bit 16).
 - **D:** coreboot's me_cleaner cannot parse CSME 12 images, and coreboot's ifdtool
   does not know the HAP location on Cannon Point. D uses PCHSTRP0 bit 16 (where
   me_cleaner puts HAP for every ME >= 11, confirmed on 100/200-series).
@@ -196,7 +197,7 @@ SPD addresses in the firmware are 0x50 = channel A DIMM0, 0x51 = A DIMM1,
 | 2 | RAM, all slots | one DIMM per slot (§5), then 2 and 4 DIMMs; `memtest86+` 1 pass | ☐ |
 | 3a | HDMI (A) | SeaBIOS text on HDMI; Linux console on HDMI | ☐ |
 | 3b | DP1, DP2 (A) | same on each DP | ☐ |
-| 3c | VGA (B, C) | output on D-Sub with variant B. With A, VGA is not expected to work (libgfxinit + DDI E) | ☐ |
+| 3c | VGA (B, C) | output on D-Sub with variant B. Not supported with A/D: libgfxinit cannot drive the DDI E converter | ☐ |
 | 4 | SATA, NVMe | a disk on each SATA6G_1..6. NVMe in M.2_1 and M.2_2. M.2_1 SATA SSD (disables SATA6G_2). Boot from each | ☐ |
 | 5 | USB | each rear and header port with a USB2 and a USB3 device; compare `lsusb -t` with DECISIONS D-014 | ☐ |
 | 6 | LAN | `ip link` shows I219-V, link and DHCP; MAC as expected (§0) | ☐ |

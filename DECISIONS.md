@@ -123,8 +123,14 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
     length 0x10.
   - DSDT `DCAT`: LDN map UART A=2, UART B=3, LPT=1, KBC=5, CIR=6.
 - **Driver:** new `superio/nuvoton/nct6793d` (patch 0002), modeled on nct6796d.
-  - LDN 0x12 is included because the vendor writes its CR EB.
-  - LDNs 0x11 and 0x15 (NCT6796D-only, as far as I know) are left out — M.
+  - `pnp_dev_info` lists only the logical devices with I/O resources: LPT, UART A/B,
+    KBC, CIR, HWM and CIR wake-up. This came out of the audit (A-1).
+  - Reason: coreboot creates and *enables* every `pnp_dev_info` entry the devicetree
+    does not list. The other LDNs (ACPI 0x0A, WDT/GPIO groups 0x07-0x09/0x0D/0x0F,
+    LDN 0x12, port-80 UART 0x14, deep-sleep 0x16) are therefore not exposed and keep
+    their power-on state.
+  - The header still defines them; the bootblock programs LDN 0x12 CR EB directly,
+    as the vendor does.
 
 ## D-010 Super I/O early init copied from vendor PEI — H
 
@@ -191,15 +197,21 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
 - **Decision:** all 6 ports enabled. No hot-plug, no DevSleep (DEVSLP0/1 pads are native
   per the vendor table, but DevSleep stays off as the safe default).
 
-## D-016 Memory: SPD 0xA0/0xA2/0xA4/0xA6 — M
+## D-016 Memory: SPD 0xA0/0xA2/0xA4/0xA6 — L/M (corrected after audit A-2)
 
-- **Finding:** four DDR4 UDIMM slots (DIMM_A1/A2/B1/B2, 2DPC). The vendor FSP-M wrapper
-  and the FSP-M UPD defaults both contain `{0xA0,0xA2,0xA4,0xA6}`, and no ASUS override
-  was found.
+- **Finding:** four DDR4 UDIMM slots (DIMM_A1/A2/B1/B2, 2DPC).
+  - The vendor FSP-M default UPD has an **empty** SPD table.
+  - The vendor runs FSP in dispatch mode. Its platform PEIM `eeee611d` holds a
+    config-block default `{0xA0,0xA2,0xA4,0xA6}`, and a setup-driven policy-update path
+    that can copy `{0xA2,0xA0,0xA2,0xA0}` instead (that table is selected by board ID).
+  - Which one this board ends up with could not be established from the image.
 - **Decision:** spd[0..3] = Ch A DIMM0, Ch A DIMM1, Ch B DIMM0, Ch B DIMM1.
 - **Rcomp / DQ / CA:** `rcomp_resistor {121,75,100}`, `rcomp_targets {60,26,20,20,26}`,
   `dq_pins_interleaved=1`, `vref_ca_config=2`. These are the CFL-S desktop values used
-  by asrock/h370m-itx_ac — M.
+  by asrock/h370m-itx_ac. The same values are one of the Intel desktop RVP entries in
+  the vendor module `1051ec65` (also board-ID selected) — M.
+- **Safety:** SPD is read-only SMBus. A wrong mapping means no memory or swapped
+  DIMM0/DIMM1 ODT, not damage.
 - **Verify:** see BRINGUP.md §5 (one DIMM in each slot alone; `decode-dimms` addresses
   under vendor firmware).
 
@@ -217,10 +229,12 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
 
 ## D-018 libgfxinit and VGA — M
 
-- **Port list:** HDMI3, DP1, DP2, HDMI1, HDMI2, Analog.
-- **VGA caveat:** libgfxinit maps `Analog` to DDI E on Skylake-family GPUs, but
-  asrock/h110m documents that VGA does not work that way. So VGA output is expected
-  **only** with FSP GOP (variant B/C).
+- **Port list:** HDMI3, DP1, DP2, HDMI1, HDMI2.
+- **VGA:** not supported by libgfxinit on this GPU generation.
+  - `Valid_Port(Analog)` needs `Has_PCH_DAC`, which is false for Skylake-family GPUs.
+  - On CNP, `PCH_DAC` has no GMBUS pin pair.
+  - So `Analog` was removed from the list (audit A-4). VGA output therefore needs FSP
+    GOP (variant B/C).
 
 ## D-019 HDA verbs — H
 
@@ -238,8 +252,9 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   `superio/common` generator (COM1, COM2, LPT, PS/2).
 - **From the vendor DSDT:** nothing board-specific besides the SIO data. Its GPE
   handlers are generic Intel RC. GPE0 group routing (GPP_C/K/E) is taken from H370M.
-  - GPP_D23 (SCI-routed in the vendor table) is therefore delivered through tier-2 and
-    has no handler. It is an input, so this is harmless.
+  - GPP_D23 is SCI-armed exactly as in the vendor table, but GPP_D is not mapped to
+    GPE0 and no handler exists in either DSDT. It is an input, so this is harmless
+    (audit A-3).
 
 ## D-021 CPU power / VR — H
 
@@ -301,7 +316,7 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
     location not known for platform".
 - **What I did:** `scripts/set_hap.py` does exactly what `me_cleaner -S` does for any
   ME >= 11: set PCHSTRP0 bit 16, nothing else. It is applied to variant A's finished
-  ROM, so A and D differ in exactly one byte (descriptor offset 0x103; checked by
+  ROM, so A and D differ in exactly one byte (descriptor offset 0x102, bit 0 = PCHSTRP0 bit 16; checked by
   build.sh).
 - **Why not skip D:** the vendor PCHSTRP0 is 0x00000000. This strap word is the CSME
   strap word on SPT/KBP. The expected failure mode of a wrong bit is "no boot / ME
@@ -324,3 +339,30 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   - The KBC setup (0x60/0x64, IRQ 1) is the same as the vendor PEI.
 - Enabling these logical devices does not change pin multiplexing, which only the
   global CRs of D-010 do.
+
+## Audit (Phase 5) — findings and resolution
+
+- **Auditor:** an independent subagent with no access to my reasoning. It re-derived the
+  facts from the vendor image.
+- **Full report:** `AUDIT.md`; the findings are summarised here.
+- **Independently confirmed:**
+  - **GPIO:** the right table (applied by `eeee611d` before memory init); 228/228 pads
+    match; no GPIO outputs.
+  - **Super I/O:** the bootblock writes are byte-identical to the vendor PEI table;
+    no fan register writes.
+  - **Other data:** slots, HDA verbs and VBT/DDI mapping match the vendor.
+  - **Regions and config:** IFD, ME and GbE are identical in A/B/C, and D changes only
+    the HAP bit. No power, voltage or thermal overrides.
+
+| # | Severity | Finding | Resolution |
+|---|---|---|---|
+| A-1 | BLOCKER | Super I/O LDNs that the devicetree does not list (ACPI, GPIO/WDT groups, LDN 0x12, port-80 UART, deep-sleep VLDNs) were allocated *enabled* by ramstage and their CR30 bits written. The vendor never touches them. | **Fixed.** The driver exposes only the LDNs with I/O resources; the devicetree lists all of them (CIR and CIR wake-up `off`). The generated `static.c` now holds exactly 2e.0/1/2/3/5/6/b/e. Writing `off` to CIR/CIR wake-up assumes their power-on default is off — verify with `superiotool -deV`. |
+| A-2 | SHOULD-FIX | The romstage.c comment claimed the SPD table came from the vendor FSP-M defaults; it does not. | **Fixed.** Comment reworded and TODO added; D-016 corrected and downgraded to L/M. Values unchanged (standard, harmless). |
+| A-3 | NIT | GPP_D23 is SCI-armed but routes nowhere. | **Kept** (vendor-identical, input only); the devicetree comment now says so. |
+| A-4 | NIT | `Analog` in gma-mainboard.ads never works on this generation. | **Fixed.** Removed from the list; docs say VGA needs FSP GOP. |
+| A-5 | NIT | USB uses OC_SKIP although OC0-5 pads are native. | **Kept.** The mapping is unknown (D-014). |
+| A-6 | NIT | The vendor locks its GPIO pads; coreboot leaves them unlocked. | **Kept.** This is hardening only and has no functional effect. Add locks after the table is verified on hardware. |
+| A-7 | NIT | Full ROMs carry the capsule's placeholder MAC and factory ME. | **Documented** (D-002, BRINGUP §0/§2). Rebuild from your dump, or use `MAC=`. |
+| A-8 | NIT | gpio_check.py did not report fields coreboot writes as 0 where the vendor keeps the reset value. | **Fixed.** They are now listed per field as "assumed 0, confirm with --dump"; there are still 0 unexplained differences. |
+| A-9 | NIT | USB connector labels in the devicetree are assumptions. | **Fixed.** The comments now say so (TODO verify). |
+| A-10 | NIT | All PCIe clocks free-running. | **Kept** (D-012, the safe default). |

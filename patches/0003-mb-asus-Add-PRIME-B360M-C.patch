@@ -1,4 +1,4 @@
-From 5aa144c8e17f4a782472fd78395ca67a23844a32 Mon Sep 17 00:00:00 2001
+From a1fb77c8a5e0b269b9c1a5d5508f08fed7ead082 Mon Sep 17 00:00:00 2001
 From: PRIME B360M-C port <noreply@anthropic.com>
 Date: Fri, 27 Nov 2026 02:45:02 +0000
 Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C
@@ -28,7 +28,7 @@ TEST=util/abuild/abuild -t asus/b360m-c. Not tested on hardware.
 
 Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- Documentation/mainboard/asus/b360m-c.md      | 155 +++++++++
+ Documentation/mainboard/asus/b360m-c.md      | 156 +++++++++
  Documentation/mainboard/index.md             |   1 +
  src/mainboard/asus/b360m-c/Kconfig           |  33 ++
  src/mainboard/asus/b360m-c/Kconfig.name      |   4 +
@@ -36,14 +36,14 @@ Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
  src/mainboard/asus/b360m-c/board_info.txt    |   5 +
  src/mainboard/asus/b360m-c/bootblock.c       |  39 +++
  src/mainboard/asus/b360m-c/data.vbt          | Bin 0 -> 4449 bytes
- src/mainboard/asus/b360m-c/devicetree.cb     | 168 ++++++++++
+ src/mainboard/asus/b360m-c/devicetree.cb     | 172 ++++++++++
  src/mainboard/asus/b360m-c/dsdt.asl          |  27 ++
  src/mainboard/asus/b360m-c/gma-mainboard.ads |  23 ++
  src/mainboard/asus/b360m-c/gpio.c            | 321 +++++++++++++++++++
  src/mainboard/asus/b360m-c/hda_verb.c        |  47 +++
  src/mainboard/asus/b360m-c/include/gpio.h    |   8 +
- src/mainboard/asus/b360m-c/romstage.c        |  30 ++
- 15 files changed, 871 insertions(+)
+ src/mainboard/asus/b360m-c/romstage.c        |  32 ++
+ 15 files changed, 878 insertions(+)
  create mode 100644 Documentation/mainboard/asus/b360m-c.md
  create mode 100644 src/mainboard/asus/b360m-c/Kconfig
  create mode 100644 src/mainboard/asus/b360m-c/Kconfig.name
@@ -61,10 +61,10 @@ Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
 
 diff --git a/Documentation/mainboard/asus/b360m-c.md b/Documentation/mainboard/asus/b360m-c.md
 new file mode 100644
-index 00000000..773ad58a
+index 00000000..f426ad50
 --- /dev/null
 +++ b/Documentation/mainboard/asus/b360m-c.md
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,156 @@
 +# ASUS PRIME B360M-C
 +
 +This page describes how to run coreboot on the [ASUS PRIME B360M-C].
@@ -187,12 +187,13 @@ index 00000000..773ad58a
 ++-----+-----------------------------------+-----------------+
 +| D   | HDMI                              | HDMI3           |
 ++-----+-----------------------------------+-----------------+
-+| E   | D-Sub, through a DP to VGA bridge | Analog          |
++| E   | D-Sub, through a DP to VGA bridge | none            |
 ++-----+-----------------------------------+-----------------+
 +```
 +
-+VGA through DDI E is not expected to work with libgfxinit (the same is
-+documented for the ASRock H110M-DVS); use the FSP GOP for VGA.
++libgfxinit does not support the DP to VGA converter on DDI E on this
++generation (the same is documented for the ASRock H110M-DVS), so the D-Sub
++port only works with the FSP GOP.
 +
 +## Super I/O
 +
@@ -391,17 +392,18 @@ HcmV?d00001
 
 diff --git a/src/mainboard/asus/b360m-c/devicetree.cb b/src/mainboard/asus/b360m-c/devicetree.cb
 new file mode 100644
-index 00000000..6df11beb
+index 00000000..1d5c9810
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/devicetree.cb
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,172 @@
 +## SPDX-License-Identifier: GPL-2.0-only
 +
 +chip soc/intel/cannonlake
 +	register "eist_enable" = "true"
 +
-+	# GPE configuration. The vendor firmware has no GPIO based GPE handlers;
-+	# routing taken from asrock/h370m-itx_ac.
++	# GPE configuration, taken from asrock/h370m-itx_ac. The vendor GPIO table
++	# routes GPP_D23 to SCI, but neither the vendor DSDT nor coreboot has a
++	# handler for it.
 +	register "gpe0_dw0" = "GPP_C"
 +	register "gpe0_dw1" = "GPP_K"
 +	register "gpe0_dw2" = "GPP_E"
@@ -437,7 +439,8 @@ index 00000000..6df11beb
 +		device ref igpu on end
 +		device ref thermal on end
 +		device ref xhci on
-+			# Port to connector mapping from the vendor SMBIOS tables. The
++			# Connector names from the vendor SMBIOS tables; their mapping to
++			# PCH port numbers is assumed (TODO: verify with lsusb -t). The
 +			# over-current pin mapping is not known, so OC is not used.
 +			register "usb2_ports" = "{
 +				[0]  = USB2_PORT_MID(OC_SKIP),	/* U31G2_12, rear */
@@ -544,6 +547,7 @@ index 00000000..6df11beb
 +							irq 0x70 = 1
 +							irq 0x72 = 12
 +						end
++						device pnp 2e.6 off end	# CIR, no header on this board
 +						# Hardware monitor: base address only, the fan
 +						# control registers keep their power-on defaults.
 +						device pnp 2e.b on
@@ -551,6 +555,7 @@ index 00000000..6df11beb
 +							io  0x62 = 0
 +							irq 0x70 = 0
 +						end
++						device pnp 2e.e off end	# CIR wake-up
 +					end
 +				end
 +			end
@@ -598,7 +603,7 @@ index 00000000..61dd70f4
 +}
 diff --git a/src/mainboard/asus/b360m-c/gma-mainboard.ads b/src/mainboard/asus/b360m-c/gma-mainboard.ads
 new file mode 100644
-index 00000000..b4f13636
+index 00000000..c8ecc80f
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/gma-mainboard.ads
 @@ -0,0 +1,23 @@
@@ -613,15 +618,15 @@ index 00000000..b4f13636
 +private package GMA.Mainboard is
 +
 +   -- Port mapping from the vendor VBT:
-+   --   DDI B: DP1 (DP++), DDI C: DP2 (DP++), DDI D: HDMI,
-+   --   DDI E: DP to VGA converter (D-Sub port)
++   --   DDI B: DP1 (DP++), DDI C: DP2 (DP++), DDI D: HDMI.
++   -- The D-Sub port is driven through a DP to VGA converter on DDI E,
++   -- which libgfxinit does not support on this generation.
 +   ports : constant Port_List :=
 +     (HDMI3,
 +      DP1,
 +      DP2,
 +      HDMI1,
 +      HDMI2,
-+      Analog,
 +      others => Disabled);
 +
 +end GMA.Mainboard;
@@ -1021,10 +1026,10 @@ index 00000000..ef2a21c4
 +#endif
 diff --git a/src/mainboard/asus/b360m-c/romstage.c b/src/mainboard/asus/b360m-c/romstage.c
 new file mode 100644
-index 00000000..531379b8
+index 00000000..96760075
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/romstage.c
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,32 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +
 +#include <soc/cnl_memcfg_init.h>
@@ -1032,9 +1037,11 @@ index 00000000..531379b8
 +
 +static const struct cnl_mb_cfg baseboard_mem_cfg = {
 +	/*
-+	 * Four DDR4 UDIMM slots, two per channel. SPD addresses as in the
-+	 * FSP-M UPD defaults that the vendor firmware also uses:
-+	 * channel A DIMM0/DIMM1, channel B DIMM0/DIMM1.
++	 * Four DDR4 UDIMM slots, two per channel: channel A DIMM0/DIMM1,
++	 * channel B DIMM0/DIMM1. Standard 0xa0..0xa6 layout, which is also the
++	 * memory config default in the vendor platform PEIM; the vendor's
++	 * runtime policy could not be confirmed.
++	 * TODO: verify the DIMM0/DIMM1 order with one DIMM per slot.
 +	 */
 +	.spd[0] = {.read_type = READ_SMBUS, .spd_spec = {.spd_smbus_address = 0xa0}},
 +	.spd[1] = {.read_type = READ_SMBUS, .spd_spec = {.spd_smbus_address = 0xa2}},
