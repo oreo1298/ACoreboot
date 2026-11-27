@@ -329,6 +329,9 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   error", which your programmer recovers. No I/O-voltage strap is known to live in
   this word.
 - **Naming:** `_ME_HAP_UNVERIFIED`. Test D last.
+- **Variant E:** the same strap change applied to variant C (EDK2), added on request.
+  `build.sh` checks that E differs from C in exactly that byte and that its BIOS
+  region is identical to C's.
 - **Verify:** HECI (00:16.0) disappears and the coreboot log reports the ME
   disabled. If D does not boot, reflash A: that proves the location is wrong.
 

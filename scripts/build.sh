@@ -3,7 +3,7 @@
 #
 # Build the ASUS PRIME B360M-C coreboot variants into out/.
 #
-#   scripts/build.sh            build A B C D
+#   scripts/build.sh            build A B C D E
 #   scripts/build.sh A B        build only A and B
 #
 #   A  SeaBIOS + libgfxinit                (primary first-boot image)
@@ -11,6 +11,7 @@
 #   C  EDK2 (coreboot default fork) + FSP GOP   (needs GitHub access)
 #   D  A + HAP bit, me_cleaner -S equivalent (modifies the IFD HAP strap!
 #      location unverified on CNP-H, see DECISIONS.md D-028)
+#   E  C + HAP bit (same strap change as D, on the EDK2 image)
 #
 # Every variant produces:
 #   out/<name>.rom              full 16 MiB image (IFD + GbE + ME + BIOS)
@@ -30,19 +31,27 @@ OUT="$TOP/out"
 JOBS="${JOBS:-$(nproc)}"
 TOOLCHAIN="$(cat "$TOP/logs/toolchain-method" 2>/dev/null || echo crossgcc)"
 BOARD=asus_prime-b360m-c
-VARIANTS="${*:-A B C D}"
+VARIANTS="${*:-A B C D E}"
 
 declare -A CFG=(
 	[A]=A_seabios_libgfxinit
 	[B]=B_seabios_fspgop
 	[C]=C_edk2_fspgop
 	[D]=none
+	[E]=none
 )
 declare -A NAME=(
 	[A]="${BOARD}_A_seabios_libgfxinit"
 	[B]="${BOARD}_B_seabios_fspgop"
 	[C]="${BOARD}_C_edk2_fspgop"
 	[D]="${BOARD}_D_seabios_libgfxinit_ME_HAP_UNVERIFIED"
+	[E]="${BOARD}_E_edk2_fspgop_ME_HAP_UNVERIFIED"
+)
+# HAP variants: built from the finished image of their base variant by setting
+# only the HAP strap (scripts/set_hap.py)
+declare -A HAPBASE=(
+	[D]=A
+	[E]=C
 )
 
 log() { echo "==> $*"; }
@@ -71,12 +80,12 @@ check_rom() {	# <variant> <rom>
 	"$TOP/build/$v/cbfstool" "$rom" print > "$OUT/$n.cbfs.txt"
 	cmp -s "$t/flashregion_2_intel_me.bin" "$TOP/blobs/me.bin" || die "$v: ME region differs"
 	cmp -s "$t/flashregion_3_gbe.bin" "$GBE" || die "$v: GbE region differs"
-	if [ "$v" = D ]; then
+	if [ -n "${HAPBASE[$v]:-}" ]; then
 		# only the HAP strap (PCHSTRP0 bit 16) may differ
 		local diffs
 		diffs="$( (cmp -l "$t/flashregion_0_flashdescriptor.bin" \
 			"$TOP/blobs/descriptor.bin" || true) | wc -l)"
-		[ "$diffs" -eq 1 ] || die "D: expected exactly 1 changed descriptor byte, got $diffs"
+		[ "$diffs" -eq 1 ] || die "$v: expected exactly 1 changed descriptor byte, got $diffs"
 		cmp -l "$t/flashregion_0_flashdescriptor.bin" "$TOP/blobs/descriptor.bin" \
 			> "$OUT/$n.ifd-diff.txt" || true
 	else
@@ -92,23 +101,28 @@ check_rom() {	# <variant> <rom>
 for v in $VARIANTS; do
 	[ -n "${CFG[$v]:-}" ] || die "unknown variant $v"
 	n="${NAME[$v]}"
-	if [ "$v" = D ]; then
-		# D is variant A's image with only the HAP strap set
-		[ -f "$OUT/${NAME[A]}.rom" ] && [ -f "$TOP/build/A/coreboot.rom" ] ||
-			die "D needs variant A, run: scripts/build.sh A D"
-		cmp -s "$OUT/${NAME[A]}.rom" "$TOP/build/A/coreboot.rom" ||
-			die "out/${NAME[A]}.rom is stale, rebuild A"
-		log "D: setting HAP on variant A's image"
-		mkdir -p "$TOP/build/D/util/ifdtool"
-		cp "$TOP/build/A/util/ifdtool/ifdtool" "$TOP/build/D/util/ifdtool/"
-		cp "$TOP/build/A/cbfstool" "$TOP/build/D/"
-		python3 -I "$TOP/scripts/set_hap.py" "$OUT/${NAME[A]}.rom" "$OUT/$n.rom" \
-			> "$TOP/logs/build-D.log"
-		cp "$OUT/${NAME[A]}.config" "$OUT/$n.config"
-		check_rom D "$OUT/$n.rom"
-		cmp -s "$OUT/$n.bios-region.bin" "$OUT/${NAME[A]}.bios-region.bin" ||
-			die "D: BIOS region differs from A"
-		log "D: OK -> out/$n.rom"
+	if [ -n "${HAPBASE[$v]:-}" ]; then
+		# HAP variant: the base variant's image with only the HAP strap set
+		b="${HAPBASE[$v]}"
+		if [ -f "$OUT/${NAME[$b]}.SKIPPED.txt" ] && [ ! -f "$TOP/build/$b/coreboot.rom" ]; then
+			log "$v: skipped, base variant $b was not built"
+			continue
+		fi
+		[ -f "$OUT/${NAME[$b]}.rom" ] && [ -f "$TOP/build/$b/coreboot.rom" ] ||
+			die "$v needs variant $b, run: scripts/build.sh $b $v"
+		cmp -s "$OUT/${NAME[$b]}.rom" "$TOP/build/$b/coreboot.rom" ||
+			die "out/${NAME[$b]}.rom is stale, rebuild $b"
+		log "$v: setting HAP on variant $b's image"
+		mkdir -p "$TOP/build/$v/util/ifdtool"
+		cp "$TOP/build/$b/util/ifdtool/ifdtool" "$TOP/build/$v/util/ifdtool/"
+		cp "$TOP/build/$b/cbfstool" "$TOP/build/$v/"
+		python3 -I "$TOP/scripts/set_hap.py" "$OUT/${NAME[$b]}.rom" "$OUT/$n.rom" \
+			> "$TOP/logs/build-$v.log"
+		cp "$OUT/${NAME[$b]}.config" "$OUT/$n.config"
+		check_rom "$v" "$OUT/$n.rom"
+		cmp -s "$OUT/$n.bios-region.bin" "$OUT/${NAME[$b]}.bios-region.bin" ||
+			die "$v: BIOS region differs from $b"
+		log "$v: OK -> out/$n.rom"
 		continue
 	fi
 	if [ "$v" = C ] && ! github_reachable; then

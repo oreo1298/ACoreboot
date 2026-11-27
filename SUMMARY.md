@@ -22,6 +22,8 @@ each value with its source and confidence. Nothing has run on hardware yet.
   - B: SeaBIOS + FSP GOP
   - C: EDK2 + FSP GOP
   - D: A + HAP strap, **unverified location**
+  - E: C + the same HAP strap (UEFI with ME disabled). Not committed; `build.sh`
+    produces it.
   - Each as a full 16 MiB image plus a BIOS-region file.
 - **Checks:** all pass (`scripts/check.sh`):
   - `util/abuild -t asus/b360m-c`
@@ -68,7 +70,7 @@ each value with its source and confidence. Nothing has run on hardware yet.
 | Other Super I/O LDNs (ACPI, GPIO/WDT, deep sleep, port-80 UART) | left untouched (power-on state) | not exposed by the driver |
 | Fan control / HWM | not implemented (power-on defaults) | safety rule: no vendor fan values |
 | TPM header | not implemented | — |
-| ME disable (HAP) | variant D only, location unverified on CNP-H | me_cleaner `-S` convention |
+| ME disable (HAP) | variants D (SeaBIOS) and E (EDK2), location unverified on CNP-H | me_cleaner `-S` convention |
 
 ## Top first-boot risks
 
@@ -93,8 +95,9 @@ Also note:
 
 ## ROM SHA256
 
-From `out/SHA256SUMS`. A and D share the BIOS region; D differs from A only in
-descriptor byte 0x102.
+From `out/SHA256SUMS` (committed ROMs). D shares A's BIOS region and differs from
+A only in descriptor byte 0x102 (the HAP bit). E (= C + the same bit) is not
+committed; `build.sh` builds and checks it the same way.
 
 ```
 54fcc12070279b5b03925ebb2e17b766302effda7c41b9fbd823caa24bb8fddc  asus_prime-b360m-c_A_seabios_libgfxinit.rom

@@ -29,22 +29,26 @@ Values marked *(verify)* are not from your board; DECISIONS.md has the details.
 | `asus_prime-b360m-c_B_seabios_fspgop.rom` | SeaBIOS | Intel FSP GOP (VBT-driven, includes VGA) | same | display fallback; VGA |
 | `asus_prime-b360m-c_C_edk2_fspgop.rom` | EDK2 UefiPayloadPkg (coreboot default, MrChromebox fork) | FSP GOP | same | UEFI boot |
 | `asus_prime-b360m-c_D_seabios_libgfxinit_ME_HAP_UNVERIFIED.rom` | = A | = A | A + **HAP strap bit set** (PCHSTRP0[16]) | ME disable, test last |
+| `asus_prime-b360m-c_E_edk2_fspgop_ME_HAP_UNVERIFIED.rom` | = C | = C | C + the same HAP bit | UEFI with ME disabled; after C and D work. Not committed: built by `scripts/build-arch.sh` / `build.sh` |
 | `*.bios-region.bin` | | | the 13 MiB BIOS region (0x300000-0xFFFFFF) of the same ROM | layout-based flashing |
 | `*.cbfs.txt`, `*.ifd.txt`, `*.config` | | | CBFS listing, descriptor dump, full .config | reference |
 
 - Every ROM uses the console on COM1 at 115200 8N1, POST codes on port 0x80 and
   log level 7 (DEBUG).
-- A, B and C carry the vendor descriptor byte-for-byte (`build.sh` checks it). D
-  differs from A in exactly one byte: descriptor offset 0x102, bit 0
-  (PCHSTRP0 bit 16).
-- **D:** coreboot's me_cleaner cannot parse CSME 12 images, and coreboot's ifdtool
-  does not know the HAP location on Cannon Point. D uses PCHSTRP0 bit 16 (where
-  me_cleaner puts HAP for every ME >= 11, confirmed on 100/200-series).
+- A, B and C carry the vendor descriptor byte-for-byte (`build.sh` checks it).
+  D differs from A, and E from C, in exactly one byte: descriptor offset 0x102,
+  bit 0 (PCHSTRP0 bit 16). Their BIOS regions are identical to A and C.
+- **D and E:** the HAP bit lives in the descriptor, so a BIOS-region-only flash of
+  D or E is just A or C. Flash them as in §2.3.
+- **Why "UNVERIFIED":** coreboot's me_cleaner cannot parse CSME 12 images, and
+  coreboot's ifdtool does not know the HAP location on Cannon Point. D and E use
+  PCHSTRP0 bit 16, where me_cleaner puts HAP for every ME >= 11 (confirmed on
+  100/200-series).
   - Worst expected outcome: no boot or ME errors. Recovery: reflash A or your dump
     with the programmer.
-  - Test D only after A boots. "HAP works" means `lspci` no longer shows the HECI
-    device (00:16.0) and coreboot's log reports the ME as disabled / not in normal
-    operation.
+  - Test D only after A boots, and E only after C and D work. "HAP works" means
+    `lspci` no longer shows the HECI device (00:16.0) and coreboot's log reports
+    the ME as disabled / not in normal operation.
 
 ## 2. Flashing
 
@@ -98,7 +102,27 @@ dump:
 MAC=xx:xx:xx:xx:xx:xx scripts/build.sh A
 ```
 
-### 2.3 Restore
+### 2.3 ME disabled (D, E): descriptor + BIOS region
+
+Writing only the descriptor and BIOS regions applies the HAP bit and keeps your
+own ME and GbE (your MAC). First check that your board's descriptor is the one
+these ROMs were built from:
+
+```bash
+cmp <(head -c 4096 backup1.bin) blobs/descriptor.bin
+```
+
+No output means identical. Then:
+
+```bash
+flashrom -p ch341a_spi --ifd -i fd -i bios -w out/asus_prime-b360m-c_E_edk2_fspgop_ME_HAP_UNVERIFIED.rom
+```
+
+If `cmp` reports differences, put your backup into `board-data/vendor/` and rerun
+`scripts/build-arch.sh`, so D and E are built from your own descriptor. To undo
+HAP, flash A or C the same way (`--ifd -i fd -i bios`), or restore the backup.
+
+### 2.4 Restore
 
 ```bash
 flashrom -p ch341a_spi -w backup1.bin
