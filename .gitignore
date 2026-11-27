@@ -7,8 +7,7 @@
 /board-data/vendor/*-spi.bin
 /board-data/vendor/regions/
 /board-data/vendor/uefi/
-# ROMs are committed once at the very end (git add -f out/)
-/out/*.rom
-/out/*.bin
+# Build outputs are committed once, at the very end (git add -f out/)
+/out/
 __pycache__/
 *.pyc
