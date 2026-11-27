@@ -27,8 +27,10 @@ restores ./coreboot with the patch series applied.
 - [x] P2 ACPI: vendor DSDT only gives SIO data
 - [x] P3 port written: patches 0001 intelp2m cnl-h, 0002 superio nct6793d, 0003 board + Documentation page
 - [x] P4 A/B/C/D built + region checks; scripts/check.sh: abuild, lint-stable, checkpatch 0/0, gpio_check all PASS
-- [~] DoD#1 fresh-clone test: running (logs/fresh-clone.log, clone in scratchpad/fresh)
-- [~] P5 independent audit running (report -> scratchpad/audit_report.md); then fix/justify in DECISIONS
+- [x] DoD#1 fresh clone (`git clone` of this repo) -> setup.sh && build.sh: toolchain + A/B/C/D all OK
+      (2026-11-27, build part 23 min; ROM hashes differ run-to-run because of coreboot build timestamps)
+- [~] P5 independent audit (first attempt hit an API usage limit; resumed). Report -> scratchpad/audit_report.md;
+      then fix/justify every finding in DECISIONS (section "Audit")
 - [~] P6 BRINGUP/DECISIONS/SUMMARY drafted; remaining: audit fixes, final rebuild (scripts/build.sh),
       fill SUMMARY hashes, `git add -f out/`, push
 
