@@ -86,7 +86,7 @@ each value with its source and confidence.
 | Serial console COM1 0x3F8 115200 8N1 from bootblock | implemented, unverified | Super I/O identified from vendor SMBIOS + DSDT; pin-mux writes replayed from vendor PEI |
 | POST codes port 0x80 (LPC_DEBUG header) | implemented | coreboot default |
 | GPIO (all 228 pads) | from vendor GPIO table, unverified | board PEIM table, applied in bootblock |
-| DDR4, 4 slots | **1 DIMM works in DIMM_B2**; SPD address for that slot and the other slots unverified | SPD 0x50-0x53 = standard layout and vendor config-block default (runtime vendor policy unknown); RCOMP from asrock/h370m (reference) |
+| DDR4, 4 slots | **1 DIMM works in DIMM_B2** (SPD 0x53, confirmed); DIMM_A1/A2/B1 unverified | SPD 0x50-0x53 = standard layout and vendor config-block default (runtime vendor policy unknown); RCOMP from asrock/h370m (reference) |
 | HDMI, DP1, DP2 | **HDMI works** (FSP GOP + i915); DP and libgfxinit unverified | DDI map from vendor VBT |
 | VGA (D-Sub via DP→VGA on DDI E) | FSP GOP only (B/C); DDI E lanes fixed for i915; unverified | VBT; libgfxinit cannot drive it on this GPU generation |
 | SATA ×6, M.2 (RP9, RP21) | **NVMe x4 works in M.2_1 (RP9)**; AHCI 6 ports up; disks/SATA-M.2 unverified | hardware lspci |
@@ -106,8 +106,8 @@ each value with its source and confidence.
 
 1. **No console at all.** The Super I/O pin-mux writes or the COM header levels are
    wrong, or a TTL adapter is on an RS-232 header. BRINGUP §3/§4 row 0.
-2. **Memory training failure** on some slots. The DIMM0/DIMM1-to-slot order within a
-   channel is inferred from FSP defaults. BRINGUP §5 tests one DIMM per slot.
+2. **Memory training failure** on some slots. DIMM_B2 is confirmed (SPD 0x53); the
+   other slots follow by symmetry. BRINGUP §5 tests one DIMM per slot.
 3. **GPIO table differences.** The vendor GPIO table is applied in bootblock, but
    RC/FSP changes some pads afterwards (CLKREQ#, possibly others) that are not in the
    table. CLKREQ is not used (clocks free-run), which keeps that risk low; fixing it
@@ -128,12 +128,12 @@ Also note:
 From `out/SHA256SUMS`.
 
 ```
-4a85c6c09b68626c16cae90d6425de425190735477a2cfda38855c9a616de0ec  asus_prime-b360m-c_A_seabios_libgfxinit.rom
-f4124473556aff92a00d593df7a8ca492393579ac497cf2ddad5178bb62ecbcc  asus_prime-b360m-c_B_seabios_fspgop.rom
-1a21092a20bdff23634a4bdff40426d5eba8476d06cefd0c4e319a51ad8e0c8f  asus_prime-b360m-c_C_edk2_fspgop.rom
-ebdf90861b6b196bd8bc9643d6d2d47354bb7c6363150dfdec251ff2adad8fb9  asus_prime-b360m-c_A_seabios_libgfxinit.bios-region.bin
-d6ce33dc701fdb5e69dfba0dc6ec2c158bef47fc1fd301a78c53e9ed8edc000a  asus_prime-b360m-c_B_seabios_fspgop.bios-region.bin
-b967bef20955186ac09a6464b205ddd5fc5165af6a513714e2821f5c9618033b  asus_prime-b360m-c_C_edk2_fspgop.bios-region.bin
+b299a73840d9f905bcbcc447196d7f86835c16ba19d52fa3a037f8a113537763  asus_prime-b360m-c_A_seabios_libgfxinit.rom
+4c6ce80f1e2dcb0cec4aa06ff630a60c49971fc28e00dc7ee7fed0e4905e788e  asus_prime-b360m-c_B_seabios_fspgop.rom
+24e21d8b60b75b56bcafdea31c3ad9811473dbda09d8bcdb627aa4cf3ff61d1b  asus_prime-b360m-c_C_edk2_fspgop.rom
+7c1bbd9c73d58357bcd56d5fb2e080eec722dd150587a21faf738d724f35668e  asus_prime-b360m-c_A_seabios_libgfxinit.bios-region.bin
+f46704aa4eb884be24ab3705ecaab876db5c4b06d19ebd5acff06e140fd51282  asus_prime-b360m-c_B_seabios_fspgop.bios-region.bin
+31d290c79e21699861096d6e1e8b271e315f7ce40dda5bcd84073a8b56c147ad  asus_prime-b360m-c_C_edk2_fspgop.bios-region.bin
 ```
 
 ## Read first

@@ -1,4 +1,4 @@
-From 0f4e896ce13ac9c8d9144903ebf65c0f1640f387 Mon Sep 17 00:00:00 2001
+From 4700dfa13a1dda931d523d565999a71aa9fb7c46 Mon Sep 17 00:00:00 2001
 From: PRIME B360M-C port <noreply@anthropic.com>
 Date: Fri, 27 Nov 2026 02:45:02 +0000
 Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C
@@ -19,6 +19,7 @@ The port is based on the vendor firmware (BIOS 3202):
 - HDA verbs and VBT are taken verbatim from the vendor firmware.
 - Memory: SPD addresses 0x50-0x53 as in the FSP defaults used by the
   vendor firmware; RCOMP and DQ settings as on asrock/h370m-itx_ac.
+  SMBIOS type 17 uses the slot names on the board (DIMM_A1 to DIMM_B2).
 - PCIe: the CLKSRC to root port mapping is not known, so every
   reference clock runs free and CLKREQ# is not used.
 - Display: DDI E drives the DP to VGA converter, so the board selects
@@ -41,7 +42,7 @@ Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
  Documentation/mainboard/index.md             |   1 +
  src/mainboard/asus/b360m-c/Kconfig           |  37 +++
  src/mainboard/asus/b360m-c/Kconfig.name      |   4 +
- src/mainboard/asus/b360m-c/Makefile.mk       |  11 +
+ src/mainboard/asus/b360m-c/Makefile.mk       |  12 +
  src/mainboard/asus/b360m-c/board_info.txt    |   5 +
  src/mainboard/asus/b360m-c/bootblock.c       |  39 +++
  src/mainboard/asus/b360m-c/cfr.c             |  33 ++
@@ -54,8 +55,9 @@ Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
  src/mainboard/asus/b360m-c/gpio.c            | 321 +++++++++++++++++++
  src/mainboard/asus/b360m-c/hda_verb.c        |  47 +++
  src/mainboard/asus/b360m-c/include/gpio.h    |   8 +
+ src/mainboard/asus/b360m-c/mainboard.c       |  21 ++
  src/mainboard/asus/b360m-c/romstage.c        |  32 ++
- 18 files changed, 988 insertions(+)
+ 19 files changed, 1010 insertions(+)
  create mode 100644 Documentation/mainboard/asus/b360m-c.md
  create mode 100644 src/mainboard/asus/b360m-c/Kconfig
  create mode 100644 src/mainboard/asus/b360m-c/Kconfig.name
@@ -72,6 +74,7 @@ Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
  create mode 100644 src/mainboard/asus/b360m-c/gpio.c
  create mode 100644 src/mainboard/asus/b360m-c/hda_verb.c
  create mode 100644 src/mainboard/asus/b360m-c/include/gpio.h
+ create mode 100644 src/mainboard/asus/b360m-c/mainboard.c
  create mode 100644 src/mainboard/asus/b360m-c/romstage.c
 
 diff --git a/Documentation/mainboard/asus/b360m-c.md b/Documentation/mainboard/asus/b360m-c.md
@@ -323,10 +326,10 @@ index 00000000..0df6ddf7
 +	bool "PRIME B360M-C"
 diff --git a/src/mainboard/asus/b360m-c/Makefile.mk b/src/mainboard/asus/b360m-c/Makefile.mk
 new file mode 100644
-index 00000000..cfcf310d
+index 00000000..42059670
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/Makefile.mk
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,12 @@
 +## SPDX-License-Identifier: GPL-2.0-only
 +
 +bootblock-y += bootblock.c
@@ -335,6 +338,7 @@ index 00000000..cfcf310d
 +romstage-y += romstage.c
 +
 +ramstage-y += hda_verb.c
++ramstage-y += mainboard.c
 +ramstage-$(CONFIG_DRIVERS_OPTION_CFR) += cfr.c
 +
 +ramstage-$(CONFIG_MAINBOARD_USE_LIBGFXINIT) += gma-mainboard.ads
@@ -1167,9 +1171,36 @@ index 00000000..ef2a21c4
 +void mainboard_configure_gpios(void);
 +
 +#endif
+diff --git a/src/mainboard/asus/b360m-c/mainboard.c b/src/mainboard/asus/b360m-c/mainboard.c
+new file mode 100644
+index 00000000..ad91d9f0
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/mainboard.c
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <commonlib/memory_info.h>
++#include <smbios.h>
++#include <stdio.h>
++
++/*
++ * Use the slot names printed on the board. A DIMM in DIMM_B2 is reported
++ * as channel 1, DIMM 1; the other slots follow the same scheme.
++ */
++void smbios_fill_dimm_locator(const struct dimm_info *dimm, struct smbios_type17 *t)
++{
++	char locator[40];
++
++	snprintf(locator, sizeof(locator), "DIMM_%c%d",
++		 'A' + dimm->channel_num, dimm->dimm_num + 1);
++	t->device_locator = smbios_add_string(t->eos, locator);
++
++	snprintf(locator, sizeof(locator), "BANK %d", dimm->bank_locator);
++	t->bank_locator = smbios_add_string(t->eos, locator);
++}
 diff --git a/src/mainboard/asus/b360m-c/romstage.c b/src/mainboard/asus/b360m-c/romstage.c
 new file mode 100644
-index 00000000..96760075
+index 00000000..2792856f
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/romstage.c
 @@ -0,0 +1,32 @@
@@ -1180,11 +1211,11 @@ index 00000000..96760075
 +
 +static const struct cnl_mb_cfg baseboard_mem_cfg = {
 +	/*
-+	 * Four DDR4 UDIMM slots, two per channel: channel A DIMM0/DIMM1,
-+	 * channel B DIMM0/DIMM1. Standard 0xa0..0xa6 layout, which is also the
-+	 * memory config default in the vendor platform PEIM; the vendor's
-+	 * runtime policy could not be confirmed.
-+	 * TODO: verify the DIMM0/DIMM1 order with one DIMM per slot.
++	 * Four DDR4 UDIMM slots, two per channel: 0xa0 DIMM_A1, 0xa2 DIMM_A2,
++	 * 0xa4 DIMM_B1, 0xa6 DIMM_B2. Standard layout, which is also the memory
++	 * config default in the vendor platform PEIM. DIMM_B2 was verified on
++	 * hardware (channel 1, DIMM 1); the other slots follow by symmetry.
++	 * TODO: verify DIMM_A1, DIMM_A2 and DIMM_B1 with one DIMM per slot.
 +	 */
 +	.spd[0] = {.read_type = READ_SMBUS, .spd_spec = {.spd_smbus_address = 0xa0}},
 +	.spd[1] = {.read_type = READ_SMBUS, .spd_spec = {.spd_smbus_address = 0xa2}},

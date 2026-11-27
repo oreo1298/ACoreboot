@@ -183,8 +183,9 @@ their own codes while they run.
 
 ## 5. Memory slot mapping test *(verify DECISIONS D-016)*
 
-SPD addresses in the firmware are 0x50 = channel A DIMM0, 0x51 = A DIMM1,
-0x52 = B DIMM0, 0x53 = B DIMM1.
+SPD addresses in the firmware are 0x50 = DIMM_A1, 0x51 = DIMM_A2,
+0x52 = DIMM_B1, 0x53 = DIMM_B2. DIMM_B2 = 0x53 is confirmed on hardware.
+`dmidecode -t 17` names the slot coreboot found each DIMM in.
 
 1. Under the vendor firmware, put one DIMM in each slot in turn:
    ```bash

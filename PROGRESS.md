@@ -64,6 +64,7 @@ restores ./coreboot with the patch series applied.
 - [x] C: CFR setup menu (me_state, power_on_after_fail) via UEFI variables (D-034); A/B keep CMOS
 - [x] Owner keeps the placeholder MAC 88:88:88:88:87:88 (no descriptor/GbE restore)
 - [x] M.2_1 = RP9 (NVMe), DIMM in DIMM_B2 (owner)
-- [ ] Owner: test the C setup menu; dmidecode -t 17 locator for DIMM_B2, VGA,
+- [x] DIMM_B2 = Channel-1-DIMM-1 = SPD 0x53 (dmidecode); SMBIOS slot names DIMM_A1..B2 added
+- [ ] Owner: test the C setup menu, VGA,
       per-slot DIMM test, x1 slot cards, DP, S3 (BRINGUP §6)
 

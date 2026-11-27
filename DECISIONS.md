@@ -197,7 +197,7 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
 - **Decision:** all 6 ports enabled. No hot-plug, no DevSleep (DEVSLP0/1 pads are native
   per the vendor table, but DevSleep stays off as the safe default).
 
-## D-016 Memory: SPD 0xA0/0xA2/0xA4/0xA6 — L/M (corrected after audit A-2)
+## D-016 Memory: SPD 0xA0/0xA2/0xA4/0xA6 — M/H (DIMM_B2 verified on hardware)
 
 - **Finding:** four DDR4 UDIMM slots (DIMM_A1/A2/B1/B2, 2DPC).
   - The vendor FSP-M default UPD has an **empty** SPD table.
@@ -212,6 +212,14 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   the vendor module `1051ec65` (also board-ID selected) — M.
 - **Safety:** SPD is read-only SMBus. A wrong mapping means no memory or swapped
   DIMM0/DIMM1 ODT, not damage.
+- **Hardware (2026-11-27):**
+  - A single 4 GiB DIMM in DIMM_B2 trains.
+  - `dmidecode -t 17` reports it as Channel-1-DIMM-1, so DIMM_B2 = spd[3] =
+    0xA6. The alternative table `{0xA2,0xA0,0xA2,0xA0}` has no 0xA6, so the
+    standard table is the one this board needs.
+  - DIMM_A1/A2/B1 = 0xA0/0xA2/0xA4 follow by symmetry and are still to be tested.
+- **SMBIOS:** `mainboard.c` names the slots `DIMM_<channel letter><DIMM number + 1>`,
+  so type 17 shows DIMM_A1..DIMM_B2 instead of Channel-x-DIMM-y.
 - **Verify:** see BRINGUP.md §5 (one DIMM in each slot alone; `decode-dimms` addresses
   under vendor firmware).
 
@@ -430,8 +438,7 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   - RP21: x4, empty
 - **Owner (2026-11-27):** the NVMe is in M.2_1, so M.2_1 = RP9. M.2_2 = RP21, as
   the only other x4 port (not tested with a device). The DIMM is in DIMM_B2.
-  Which SPD address that slot uses is not yet known: `dmidecode -t 17` shows it as
-  Channel-1-DIMM-0 (0x52) or Channel-1-DIMM-1 (0x53).
+  `dmidecode -t 17` reports it as Channel-1-DIMM-1, i.e. SPD 0x53 (see D-016).
 - RP1-RP5 have no lanes. So the x1 slots must be RP7/RP8, not the RP4/RP5 of the
   vendor SMBIOS; slot descriptors moved. Which slot is which is still unconfirmed.
 - **GPIO** (`gpio_check.py --dump`): 2 of 228 pads differ.
