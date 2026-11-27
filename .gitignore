@@ -1,0 +1,14 @@
+# coreboot tree is cloned by scripts/setup.sh and never committed
+/coreboot/
+# build logs / scratch
+/logs/
+/build/
+# derived from board-data/vendor/*.CAP by scripts/extract_blobs.sh
+/board-data/vendor/*-spi.bin
+/board-data/vendor/regions/
+/board-data/vendor/uefi/
+# ROMs are committed once at the very end (git add -f out/)
+/out/*.rom
+/out/*.bin
+__pycache__/
+*.pyc
