@@ -3,9 +3,9 @@
 A coreboot port for the ASUS PRIME B360M-C (Intel B360 / Coffee Lake-S), with build
 scripts and ready-made ROMs.
 
-> **Hardware status:** variant C (EDK2 + FSP GOP) boots and works on the owner's
-> board (first test, 2026-11-27). Variants A, B, D and E are untested, and so are
-> the per-feature checks. Read [BRINGUP.md](BRINGUP.md) before flashing: back up
+> **Hardware status:** variants C (EDK2 + FSP GOP) and E (C + ME-disable bit) boot
+> and work on the owner's board (2026-11-27). Not yet confirmed: whether E's HAP
+> bit really disables the ME, and the per-feature checks. A, B and D are untested. Read [BRINGUP.md](BRINGUP.md) before flashing: back up
 > the chip, flash the BIOS region only, and watch the COM1 serial console.
 
 ## Build on Arch Linux

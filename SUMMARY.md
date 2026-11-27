@@ -15,6 +15,9 @@ each value with its source and confidence.
 - 2026-11-27: variant C (EDK2 + FSP GOP) flashed first; the owner reports it boots
   and works. So bootblock → romstage → FSP-M memory init → ramstage → FSP-S → EDK2
   → OS works with at least one DIMM and the display in use.
+- 2026-11-27: variant E (C + HAP bit) also boots and works. So the HAP strap at
+  PCHSTRP0[16] at least does not prevent booting. Whether it actually disables
+  the ME (HECI 00:16.0 gone from `lspci`) is not yet confirmed.
 - The per-feature checklist (BRINGUP.md §6) has not been reported yet. Until then
   the table below still says "unverified".
 
