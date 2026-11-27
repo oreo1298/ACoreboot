@@ -1,4 +1,4 @@
-From c66189077fee94be3967a64d84876f12cf220809 Mon Sep 17 00:00:00 2001
+From 0f4e896ce13ac9c8d9144903ebf65c0f1640f387 Mon Sep 17 00:00:00 2001
 From: PRIME B360M-C port <noreply@anthropic.com>
 Date: Fri, 27 Nov 2026 02:45:02 +0000
 Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C
@@ -30,8 +30,8 @@ The port is based on the vendor firmware (BIOS 3202):
 
 Not implemented: fan control, TPM.
 
-TEST=Boots Linux with the EDK2 payload and the FSP GOP. One DIMM,
-NVMe in an M.2 socket, I219-V, ALC887, USB and HDMI work. With the
+TEST=Boots Linux with the EDK2 payload and the FSP GOP. One DIMM in
+DIMM_B2, NVMe in M.2_1, I219-V, ALC887, USB and HDMI work. With the
 CMOS option me_state=Disable the ME reports Soft Temporary Disable and
 HECI is hidden.
 
@@ -76,7 +76,7 @@ Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
 
 diff --git a/Documentation/mainboard/asus/b360m-c.md b/Documentation/mainboard/asus/b360m-c.md
 new file mode 100644
-index 00000000..adaf8c9d
+index 00000000..6e1e75dd
 --- /dev/null
 +++ b/Documentation/mainboard/asus/b360m-c.md
 @@ -0,0 +1,176 @@
@@ -85,8 +85,8 @@ index 00000000..adaf8c9d
 +This page describes how to run coreboot on the [ASUS PRIME B360M-C].
 +
 +```{note}
-+Tested with the EDK2 payload and the FSP GOP: boots Linux with one DIMM, NVMe
-+in an M.2 socket, I219-V LAN, ALC887 audio, USB and HDMI. Everything else
++Tested with the EDK2 payload and the FSP GOP: boots Linux with one DIMM in
++DIMM_B2, NVMe in M.2_1, I219-V LAN, ALC887 audio, USB and HDMI. Everything else
 +below is implemented but not yet tested.
 +```
 +
@@ -534,7 +534,7 @@ HcmV?d00001
 
 diff --git a/src/mainboard/asus/b360m-c/devicetree.cb b/src/mainboard/asus/b360m-c/devicetree.cb
 new file mode 100644
-index 00000000..150841f6
+index 00000000..790d40b1
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/devicetree.cb
 @@ -0,0 +1,173 @@
@@ -649,7 +649,7 @@ index 00000000..150841f6
 +			smbios_slot_desc "SlotTypePciExpressGen3X1" "SlotLengthShort"
 +				"PCIEX1_2" "SlotDataBusWidth1X"
 +		end
-+		device ref pcie_rp9 on end	# M.2 socket, x4 (NVMe trained at 8 GT/s x4)
++		device ref pcie_rp9 on end	# M.2_1, x4 (NVMe trained at 8 GT/s x4)
 +		device ref pcie_rp10 on end
 +		device ref pcie_rp11 on end
 +		device ref pcie_rp12 on end
@@ -661,7 +661,7 @@ index 00000000..150841f6
 +		device ref pcie_rp18 on end
 +		device ref pcie_rp19 on end
 +		device ref pcie_rp20 on end
-+		device ref pcie_rp21 on end	# M.2 socket, x4
++		device ref pcie_rp21 on end	# M.2_2, x4 (the only other x4 port)
 +		device ref pcie_rp22 on end
 +		device ref pcie_rp23 on end
 +		device ref pcie_rp24 on end

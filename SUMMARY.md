@@ -28,7 +28,8 @@ each value with its source and confidence.
     lane it's B360's 12.
     - RP4 and RP5, which the vendor SMBIOS gives for the x1 slots, have no lanes, so
       the x1 slots are RP7/RP8 (labels moved, TODO confirm with a card).
-    - The M.2 sockets are RP9 and RP21.
+    - The M.2 sockets: M.2_1 is RP9 (owner confirmed); M.2_2 is RP21, the only
+      other x4 port.
   - **Working:** I219-V link with traffic (placeholder MAC), the ALC887 codec, USB
     (keyboard/mouse via a hub on USB2 port 10), HDMI, and all 6 AHCI ports.
   - **The ME still ran normally** (HECI 00:16.0 present, operation mode 0). So
@@ -85,10 +86,10 @@ each value with its source and confidence.
 | Serial console COM1 0x3F8 115200 8N1 from bootblock | implemented, unverified | Super I/O identified from vendor SMBIOS + DSDT; pin-mux writes replayed from vendor PEI |
 | POST codes port 0x80 (LPC_DEBUG header) | implemented | coreboot default |
 | GPIO (all 228 pads) | from vendor GPIO table, unverified | board PEIM table, applied in bootblock |
-| DDR4, 4 slots | **1 DIMM works** (slot not reported); other slots unverified | SPD 0x50-0x53 = standard layout and vendor config-block default (runtime vendor policy unknown); RCOMP from asrock/h370m (reference) |
+| DDR4, 4 slots | **1 DIMM works in DIMM_B2**; SPD address for that slot and the other slots unverified | SPD 0x50-0x53 = standard layout and vendor config-block default (runtime vendor policy unknown); RCOMP from asrock/h370m (reference) |
 | HDMI, DP1, DP2 | **HDMI works** (FSP GOP + i915); DP and libgfxinit unverified | DDI map from vendor VBT |
 | VGA (D-Sub via DP→VGA on DDI E) | FSP GOP only (B/C); DDI E lanes fixed for i915; unverified | VBT; libgfxinit cannot drive it on this GPU generation |
-| SATA ×6, M.2 (RP9, RP21) | **NVMe x4 works on RP9**; AHCI 6 ports up; disks/SATA-M.2 unverified | hardware lspci |
+| SATA ×6, M.2 (RP9, RP21) | **NVMe x4 works in M.2_1 (RP9)**; AHCI 6 ports up; disks/SATA-M.2 unverified | hardware lspci |
 | USB 12×USB2 / 6×USB3 | **works** (port 10 confirmed); full map unverified; OC not used | port names from SMBIOS (mapping assumed 1:1) |
 | I219-V LAN | **works** (link + traffic) | PCH GbE + vendor GbE region |
 | ALC887 audio (+ HDMI audio) | **codec detected and configured**; playback unverified | verbs copied from vendor |

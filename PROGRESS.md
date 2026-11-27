@@ -62,6 +62,8 @@ restores ./coreboot with the patch series applied.
       HAP disproved → D/E removed, me_state CMOS option added (DECISIONS D-030..D-033)
 - [x] me_state=Disable verified on C (CMOS backend): Soft Temporary Disable, HECI hidden
 - [x] C: CFR setup menu (me_state, power_on_after_fail) via UEFI variables (D-034); A/B keep CMOS
-- [ ] Owner: test the C setup menu; restore own descriptor+GbE from backup (MAC), VGA,
+- [x] Owner keeps the placeholder MAC 88:88:88:88:87:88 (no descriptor/GbE restore)
+- [x] M.2_1 = RP9 (NVMe), DIMM in DIMM_B2 (owner)
+- [ ] Owner: test the C setup menu; dmidecode -t 17 locator for DIMM_B2, VGA,
       per-slot DIMM test, x1 slot cards, DP, S3 (BRINGUP §6)
 

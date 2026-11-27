@@ -428,6 +428,10 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   - RP7 and RP8: x1, empty
   - RP9: x4, NVMe trained at 8 GT/s x4
   - RP21: x4, empty
+- **Owner (2026-11-27):** the NVMe is in M.2_1, so M.2_1 = RP9. M.2_2 = RP21, as
+  the only other x4 port (not tested with a device). The DIMM is in DIMM_B2.
+  Which SPD address that slot uses is not yet known: `dmidecode -t 17` shows it as
+  Channel-1-DIMM-0 (0x52) or Channel-1-DIMM-1 (0x53).
 - RP1-RP5 have no lanes. So the x1 slots must be RP7/RP8, not the RP4/RP5 of the
   vendor SMBIOS; slot descriptors moved. Which slot is which is still unconfirmed.
 - **GPIO** (`gpio_check.py --dump`): 2 of 228 pads differ.
