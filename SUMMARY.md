@@ -1,0 +1,98 @@
+# SUMMARY — coreboot for ASUS PRIME B360M-C
+
+**Boot Guard: not provisioned in the vendor firmware.** The FIT (BIOS 3202) holds only
+4 microcode entries: no Startup ACM, no Key Manifest, no Boot Policy Manifest. A board
+with Boot Guard fused on could not boot this vendor image, so coreboot can run. The fuse
+state itself was not read (`intelmetool -b` is on the capture list).
+
+**Input gap: only the ASUS update capsule (`3202.CAP`) was provided.** There was no SPI
+dump and none of the requested dumps (inteltool, lspci, superiotool, …). Everything
+below comes from the vendor image, the manual or reference boards; DECISIONS.md lists
+each value with its source and confidence. Nothing has run on hardware yet.
+
+## What was built
+
+- **coreboot:** main @ c49935a4 + 3 patches (`patches/`):
+  1. `util/intelp2m: Add Cannon Lake PCH-H platform`. The `cnl` profile is LP-only and
+     maps PADRSTCFG wrongly for PCH-H.
+  2. `superio/nuvoton: Add NCT6793D`.
+  3. `mb/asus: Add PRIME B360M-C`: board, documentation page and index entry.
+- **ROMs (`out/`):** all variants build:
+  - A: SeaBIOS + libgfxinit
+  - B: SeaBIOS + FSP GOP
+  - C: EDK2 + FSP GOP
+  - D: A + HAP strap, **unverified location**
+  - Each as a full 16 MiB image plus a BIOS-region file.
+- **Checks:** all pass (`scripts/check.sh`):
+  - `util/abuild -t asus/b360m-c`
+  - `util/lint lint-stable`
+  - checkpatch: 0 errors / 0 warnings on all 3 patches (run with `--no-signoff`; you
+    must add your own Signed-off-by)
+  - `scripts/gpio_check.py`: 228 pads, 0 unexplained differences
+- **Image checks:** `build.sh` asserts the descriptor, ME and GbE regions are
+  byte-identical to `blobs/`. The only exception is D, which differs in exactly one
+  descriptor byte.
+- **Tooling:**
+  - `scripts/setup.sh` (pinned clone, needed submodules, patches, crossgcc toolchain,
+    blobs)
+  - `scripts/build.sh`
+  - `scripts/vendor_gpio.py` → intelp2m → `scripts/gen_gpio_c.py` (GPIO pipeline)
+  - `scripts/gpio_check.py` (also checks a real `inteltool -G` with `--dump`)
+  - `scripts/extract_blobs.sh`, `extract_vbt.py`, `gbe_mac.py` (set your MAC in GbE),
+    `set_hap.py`, `vbt_dump.py`
+
+## Feature status
+
+| Feature | Status | Source |
+|---|---|---|
+| Serial console COM1 0x3F8 115200 8N1 from bootblock | implemented, unverified | Super I/O identified from vendor SMBIOS + DSDT; pin-mux writes replayed from vendor PEI |
+| POST codes port 0x80 (LPC_DEBUG header) | implemented | coreboot default |
+| GPIO (all 228 pads) | from vendor GPIO table, unverified | board PEIM table, applied in bootblock |
+| DDR4, 4 slots | implemented, unverified | SPD 0x50-0x53 from FSP/vendor defaults; RCOMP from asrock/h370m (reference) |
+| HDMI, DP1, DP2 (libgfxinit) | implemented, unverified | DDI map from vendor VBT |
+| VGA (D-Sub via DP→VGA on DDI E) | FSP GOP only (B/C), unverified | VBT; libgfxinit not expected to work |
+| SATA ×6, M.2_1 (SATA/PCIe), M.2_2 | implemented, unverified | manual + SMBIOS; M.2 root ports left to FSP/straps |
+| USB 12×USB2 / 6×USB3 | implemented, unverified; OC not used | port names from SMBIOS (mapping assumed 1:1) |
+| I219-V LAN | implemented, unverified | PCH GbE + vendor GbE region |
+| ALC887 audio (+ HDMI audio) | implemented, unverified | verbs copied from vendor |
+| PCIe x16, x1 ×2, PCI (ASM1083) | implemented, unverified | SMBIOS type 9 (RP4, RP5, RP6) |
+| PCIe clocks | all free-running, no CLKREQ# | safe default (mapping unknown) |
+| S3 | enabled (`HAVE_ACPI_RESUME`), unverified | coreboot/FSP |
+| COM2, LPT, PS/2 | implemented, unverified | vendor DSDT resources |
+| Fan control / HWM | not implemented (power-on defaults) | safety rule: no vendor fan values |
+| TPM header | not implemented | — |
+| ME disable (HAP) | variant D only, location unverified on CNP-H | me_cleaner `-S` convention |
+
+## Top first-boot risks
+
+1. **No console at all.** The Super I/O pin-mux writes or the COM header levels are
+   wrong, or a TTL adapter is on an RS-232 header. BRINGUP §3/§4 row 0.
+2. **Memory training failure** on some slots. The DIMM0/DIMM1-to-slot order within a
+   channel is inferred from FSP defaults. BRINGUP §5 tests one DIMM per slot.
+3. **GPIO table differences.** The vendor GPIO table is applied in bootblock, but
+   RC/FSP changes some pads afterwards (CLKREQ#, possibly others) that are not in the
+   table. CLKREQ is not used (clocks free-run), which keeps that risk low; fixing it
+   needs a real `inteltool -G`.
+4. **PCIe topology.** All 24 root ports are enabled and FSP prunes them. The M.2
+   root ports and the GbE lane come from soft straps and were not mapped. An FSP-S
+   hang or a missing NVMe would point here.
+5. **Display on A.** HDMI should work. VGA through DDI E is not expected to work with
+   libgfxinit. Use B (FSP GOP) for VGA.
+
+Also note:
+- Fans run at the Super I/O power-on default, probably full speed.
+- A full-image flash built from the capsule replaces your board's MAC with ASUS's
+  placeholder. Flash BIOS-region only, or rebuild from your own dump / with `MAC=`.
+
+## ROM SHA256
+
+See `out/SHA256SUMS` (final values below).
+
+```
+(filled in at the end)
+```
+
+## Read first
+
+**BRINGUP.md** (flash procedure, serial pinout/levels, console milestones, test list,
+what to capture), then **DECISIONS.md**.

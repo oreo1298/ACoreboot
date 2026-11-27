@@ -269,19 +269,58 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
 
 ## D-025 EDK2 (variant C) — H
 
-- **Finding:** coreboot's EDK2 payload clones edk2 and its submodules (openssl, brotli,
-  libfdt, mipisyst, …) from GitHub, and github.com is unreachable from this VM.
-  review.coreboot.org mirrors edk2 itself but none of its submodules.
-- **Decision:** `scripts/build.sh` builds C automatically wherever GitHub is reachable;
-  here it writes `out/*_C_*.SKIPPED.txt`.
+- **Built:** variant C uses coreboot's default EDK2 payload (MrChromebox fork,
+  UefiPayloadPkg) + FSP GOP.
+- **Network:** github.com web pages return 403 from this VM, but git over HTTPS works.
+  So `build.sh` checks with `git ls-remote` and only skips C (writing
+  `out/*_C_*.SKIPPED.txt`) when GitHub is really unreachable.
+- **Footprint:** the EDK2 clone with recursive submodules is about 7 GB.
 
 ## D-026 coreboot pin — H
 
 - **Pin:** `main` @ c49935a44f99585488dec654bd4f3eefe262160c (2026-11-26).
 - **Patches:** the series in `patches/` applies on top of it.
 
-## D-027 Signed-off-by — H
+## D-027 Signed-off-by / trailers — H
 
 - The patches carry no `Signed-off-by:`. The DCO is a statement only you can make.
   `git commit --amend -s` each patch before you send it to Gerrit.
 - checkpatch runs with `--no-signoff` for that reason.
+- The AI attribution trailer is written `Co-authored-by:` (checkpatch's preferred
+  casing) in the coreboot series.
+
+## D-028 Variant D: HAP bit location on CNP-H — L/M (unverified)
+
+- **Asked for:** "variant A with me_cleaner (HAP)".
+- **Blockers:**
+  - coreboot's `USE_ME_CLEANER` Kconfig does not support Cannon/Coffee Lake.
+  - me_cleaner (in-tree and upstream master) cannot parse CSME 12 images: it requires
+    `$FPT` at ME+0x0/0x10, but this image starts with a CSE layout table and its FPT
+    is at +0x20E000.
+  - coreboot's ifdtool has a per-platform HAP table without CNL and reports "HAP bit
+    location not known for platform".
+- **What I did:** `scripts/set_hap.py` does exactly what `me_cleaner -S` does for any
+  ME >= 11: set PCHSTRP0 bit 16, nothing else. It is applied to variant A's finished
+  ROM, so A and D differ in exactly one byte (descriptor offset 0x103; checked by
+  build.sh).
+- **Why not skip D:** the vendor PCHSTRP0 is 0x00000000. This strap word is the CSME
+  strap word on SPT/KBP. The expected failure mode of a wrong bit is "no boot / ME
+  error", which your programmer recovers. No I/O-voltage strap is known to live in
+  this word.
+- **Naming:** `_ME_HAP_UNVERIFIED`. Test D last.
+- **Verify:** HECI (00:16.0) disappears and the coreboot log reports the ME
+  disabled. If D does not boot, reflash A: that proves the location is wrong.
+
+## D-029 Super I/O LPT DMA, COM2, LPT, PS/2 enabled — M
+
+- **Settings:**
+  - LPT: 0x378, IRQ 7, no DMA (DRQ 4 = none).
+  - COM2: 0x2F8, IRQ 3.
+  - PS/2: 0x60/0x64, IRQ 1/12.
+- **Source:** the vendor DSDT `_PRS`.
+  - `UAR2` prefers 0x2F8/IRQ 3.
+  - `LPTE` prefers 0x378/IRQ 5 and allows IRQ 5,6,7,9-12. I kept the legacy IRQ 7,
+    which is in that list.
+  - The KBC setup (0x60/0x64, IRQ 1) is the same as the vendor PEI.
+- Enabling these logical devices does not change pin multiplexing, which only the
+  global CRs of D-010 do.
