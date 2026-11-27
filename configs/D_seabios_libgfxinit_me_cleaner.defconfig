@@ -1,8 +1,0 @@
-# Variant D: variant A + me_cleaner -S (HAP bit set, ME partitions untouched).
-# This is the ONLY variant that modifies the flash descriptor (HAP strap).
-CONFIG_PAYLOAD_SEABIOS=y
-CONFIG_SEABIOS_STABLE=y
-CONFIG_MAINBOARD_USE_LIBGFXINIT=y
-CONFIG_VGA_TEXT_FRAMEBUFFER=y
-CONFIG_USE_ME_CLEANER=y
-CONFIG_ME_CLEANER_ARGS="-S"

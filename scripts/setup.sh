@@ -82,7 +82,7 @@ else
 	fi
 	log "applying patches/*.patch on $COREBOOT_COMMIT"
 	git -C "$CB" -c advice.detachedHead=false checkout -q -f -B "$BRANCH" "$COREBOOT_COMMIT"
-	git -C "$CB" -c user.name="ACoreboot setup" -c user.email="setup@localhost" \
+	git -C "$CB" -c user.name="b360m-c setup" -c user.email="setup@localhost" \
 		am -q --committer-date-is-author-date "$TOP"/patches/*.patch
 	echo "$STAMP" > "$STAMP_FILE"
 fi

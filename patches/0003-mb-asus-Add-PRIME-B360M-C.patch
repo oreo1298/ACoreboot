@@ -1,13 +1,39 @@
-From 951e1679cd07072738635f6adc0bfb8ee253a473 Mon Sep 17 00:00:00 2001
-From: ACoreboot port <noreply@anthropic.com>
-Date: Fri, 27 Nov 2026 02:33:20 +0000
-Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C (WIP)
+From 5aa144c8e17f4a782472fd78395ca67a23844a32 Mon Sep 17 00:00:00 2001
+From: PRIME B360M-C port <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 02:45:02 +0000
+Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C
 
+The ASUS PRIME B360M-C is a micro-ATX board for Coffee Lake-S CPUs with
+an Intel B360 (Cannon Point PCH-H), four DDR4 UDIMM slots, a Nuvoton
+NCT6793D Super I/O, an Intel I219-V PHY, a Realtek ALC887 and an ASMedia
+ASM1083 PCIe to PCI bridge.
+
+The port is based on the vendor firmware (BIOS 3202):
+- GPIOs: the board GPIO_INIT_CONFIG table of the vendor firmware,
+  converted with util/intelp2m -p cnl-h. Like the vendor firmware, which
+  applies it early in PEI, the table is applied in the bootblock.
+- Super I/O: the bootblock repeats the multi-function pin setup of the
+  vendor PEI module and enables UART A (COM1 header) for the console.
+  The hardware monitor only gets its base address; fan control is left
+  at the power-on defaults.
+- HDA verbs and VBT are taken verbatim from the vendor firmware.
+- Memory: SPD addresses 0x50-0x53 as in the FSP defaults used by the
+  vendor firmware; RCOMP and DQ settings as on asrock/h370m-itx_ac.
+- PCIe: the CLKSRC to root port mapping is not known, so every
+  reference clock runs free and CLKREQ# is not used.
+
+Not implemented: fan control, TPM.
+
+TEST=util/abuild/abuild -t asus/b360m-c. Not tested on hardware.
+
+Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
 ---
+ Documentation/mainboard/asus/b360m-c.md      | 155 +++++++++
+ Documentation/mainboard/index.md             |   1 +
  src/mainboard/asus/b360m-c/Kconfig           |  33 ++
  src/mainboard/asus/b360m-c/Kconfig.name      |   4 +
  src/mainboard/asus/b360m-c/Makefile.mk       |  10 +
- src/mainboard/asus/b360m-c/board_info.txt    |   7 +
+ src/mainboard/asus/b360m-c/board_info.txt    |   5 +
  src/mainboard/asus/b360m-c/bootblock.c       |  39 +++
  src/mainboard/asus/b360m-c/data.vbt          | Bin 0 -> 4449 bytes
  src/mainboard/asus/b360m-c/devicetree.cb     | 168 ++++++++++
@@ -17,7 +43,8 @@ Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C (WIP)
  src/mainboard/asus/b360m-c/hda_verb.c        |  47 +++
  src/mainboard/asus/b360m-c/include/gpio.h    |   8 +
  src/mainboard/asus/b360m-c/romstage.c        |  30 ++
- 13 files changed, 717 insertions(+)
+ 15 files changed, 871 insertions(+)
+ create mode 100644 Documentation/mainboard/asus/b360m-c.md
  create mode 100644 src/mainboard/asus/b360m-c/Kconfig
  create mode 100644 src/mainboard/asus/b360m-c/Kconfig.name
  create mode 100644 src/mainboard/asus/b360m-c/Makefile.mk
@@ -32,6 +59,179 @@ Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C (WIP)
  create mode 100644 src/mainboard/asus/b360m-c/include/gpio.h
  create mode 100644 src/mainboard/asus/b360m-c/romstage.c
 
+diff --git a/Documentation/mainboard/asus/b360m-c.md b/Documentation/mainboard/asus/b360m-c.md
+new file mode 100644
+index 00000000..773ad58a
+--- /dev/null
++++ b/Documentation/mainboard/asus/b360m-c.md
+@@ -0,0 +1,155 @@
++# ASUS PRIME B360M-C
++
++This page describes how to run coreboot on the [ASUS PRIME B360M-C].
++
++```{warning}
++This port has not been tested on hardware yet. Everything below describes
++what is implemented, not what is known to work.
++```
++
++## Technology
++
++```{eval-rst}
+++-------------+-------------------------------------------------------------------+
++| CPU         | Intel 8th/9th Gen Core, Pentium, Celeron (Coffee Lake-S, LGA1151) |
+++-------------+-------------------------------------------------------------------+
++| DRAM        | 4 DDR4 UDIMM slots, 2 per channel                                 |
+++-------------+-------------------------------------------------------------------+
++| Chipset     | Intel B360 (Cannon Point PCH-H)                                   |
+++-------------+-------------------------------------------------------------------+
++| Super I/O   | Nuvoton NCT6793D                                                  |
+++-------------+-------------------------------------------------------------------+
++| LAN         | Intel I219-V (PCH GbE)                                            |
+++-------------+-------------------------------------------------------------------+
++| Audio       | Realtek ALC887                                                    |
+++-------------+-------------------------------------------------------------------+
++| PCI         | ASMedia ASM1083 PCIe to PCI bridge (one PCI slot)                 |
+++-------------+-------------------------------------------------------------------+
++| Coprocessor | Intel CSME 12 (consumer)                                          |
+++-------------+-------------------------------------------------------------------+
++```
++
++## Required proprietary blobs
++
++```{eval-rst}
+++--------------+------------------------------------------+----------+
++| Binary file  | Apply                                    | Required |
+++==============+==========================================+==========+
++| FSP-M, FSP-S | Intel FSP for Coffee Lake (3rdparty/fsp) | yes      |
+++--------------+------------------------------------------+----------+
++| Microcode    | 3rdparty/intel-microcode                 | yes      |
+++--------------+------------------------------------------+----------+
++| IFD          | Intel Flash Descriptor                   | yes      |
+++--------------+------------------------------------------+----------+
++| ME           | Intel CSME firmware                      | yes      |
+++--------------+------------------------------------------+----------+
++| GbE          | I219-V configuration and MAC address     | yes      |
+++--------------+------------------------------------------+----------+
++```
++
++The IFD, ME and GbE regions can be extracted from a backup of the flash chip
++with `ifdtool --platform cnl -x`. The ASUS update capsule (`.CAP`) also
++contains a complete 16 MiB image after a 2 KiB header, but its GbE region holds
++the placeholder MAC address `88:88:88:88:87:88` rather than the board's own.
++
++Flash layout of the vendor descriptor:
++
++```{eval-rst}
+++------------+---------------------+
++| Region     | Range               |
+++============+=====================+
++| Descriptor | 0x000000 - 0x000fff |
+++------------+---------------------+
++| GbE        | 0x001000 - 0x002fff |
+++------------+---------------------+
++| ME         | 0x003000 - 0x2fffff |
+++------------+---------------------+
++| BIOS       | 0x300000 - 0xffffff |
+++------------+---------------------+
++```
++
++## Building coreboot
++
++```bash
++make distclean
++touch .config
++./util/scripts/config --enable VENDOR_ASUS --enable BOARD_ASUS_B360M_C
++make olddefconfig
++make
++```
++
++To produce a full image, additionally enable `HAVE_IFD_BIN`, `HAVE_ME_BIN` and
++`HAVE_GBE_BIN` and point them to the extracted regions. Select "Use the preset
++values to protect the regions" (`DO_NOT_TOUCH_DESCRIPTOR_REGION`) to keep the
++vendor flash region permissions.
++
++## Flashing coreboot
++
++```{eval-rst}
+++-------------------+------------------------------------------------+
++| Type              | Value                                          |
+++===================+================================================+
++| Size              | 16 MiB                                         |
+++-------------------+------------------------------------------------+
++| Model             | descriptor lists Winbond W25Q128 and           |
++|                   | GigaDevice GD25Q128 (not verified on a board)  |
+++-------------------+------------------------------------------------+
++| Internal flashing | BIOS region only (descriptor and ME region are |
++|                   | read-only for the host)                        |
+++-------------------+------------------------------------------------+
++```
++
++Back up the whole chip with an external programmer before the first flash.
++Afterwards the BIOS region can be updated internally:
++
++```bash
++flashrom -p internal --ifd -i bios -w coreboot.rom
++```
++
++## Display
++
++The vendor VBT describes four outputs:
++
++```{eval-rst}
+++-----+-----------------------------------+-----------------+
++| DDI | Connector                         | libgfxinit port |
+++=====+===================================+=================+
++| B   | DisplayPort 1 (dual mode)         | DP1 / HDMI1     |
+++-----+-----------------------------------+-----------------+
++| C   | DisplayPort 2 (dual mode)         | DP2 / HDMI2     |
+++-----+-----------------------------------+-----------------+
++| D   | HDMI                              | HDMI3           |
+++-----+-----------------------------------+-----------------+
++| E   | D-Sub, through a DP to VGA bridge | Analog          |
+++-----+-----------------------------------+-----------------+
++```
++
++VGA through DDI E is not expected to work with libgfxinit (the same is
++documented for the ASRock H110M-DVS); use the FSP GOP for VGA.
++
++## Super I/O
++
++The bootblock repeats the multi-function pin setup done by the vendor
++firmware's Super I/O PEI module and enables UART A at 0x3f8 for the console
++(COM1 header). The hardware monitor is left at its power-on defaults apart from
++its base address (0x290), so there is no fan control.
++
++## Implemented, untested
++
++- coreboot console on the COM1 header (115200 8N1), POST codes on port 0x80
++- DDR4 in all four slots (SPD addresses 0x50-0x53)
++- iGPU via libgfxinit (HDMI, DP) or FSP GOP
++- SATA ports 1-6, both M.2 sockets, PCIe x16, both PCIe x1 slots, PCI via ASM1083
++- USB (over-current reporting not configured)
++- I219-V LAN
++- ALC887 audio
++- S3 suspend
++- COM2, LPT and PS/2 keyboard/mouse
++
++## Not implemented
++
++- Fan control (the fans run with the Super I/O power-on defaults)
++- TPM header
++- CLKREQ# based PCIe clock power management (all reference clocks run free)
++
++[ASUS PRIME B360M-C]: https://www.asus.com/supportonly/prime%20b360m-c/helpdesk_knowledge/
+diff --git a/Documentation/mainboard/index.md b/Documentation/mainboard/index.md
+index 0b0d52c7..da0fc41c 100644
+--- a/Documentation/mainboard/index.md
++++ b/Documentation/mainboard/index.md
+@@ -59,6 +59,7 @@ P8Z77-M Pro <asus/p8z77-m_pro.md>
+ P8Z77-V <asus/p8z77-v.md>
+ P8Z77-V LE PLUS <asus/p8z77-v_le_plus.md>
+ wifigo_v1 <asus/wifigo_v1.md>
++PRIME B360M-C <asus/b360m-c.md>
+ PRIME H610M-K D4 <asus/h610m-k.md>
+ ```
+ 
 diff --git a/src/mainboard/asus/b360m-c/Kconfig b/src/mainboard/asus/b360m-c/Kconfig
 new file mode 100644
 index 00000000..9ad70c1e
@@ -99,15 +299,13 @@ index 00000000..32ea6e19
 +ramstage-$(CONFIG_MAINBOARD_USE_LIBGFXINIT) += gma-mainboard.ads
 diff --git a/src/mainboard/asus/b360m-c/board_info.txt b/src/mainboard/asus/b360m-c/board_info.txt
 new file mode 100644
-index 00000000..7ffcaf83
+index 00000000..ffc40227
 --- /dev/null
 +++ b/src/mainboard/asus/b360m-c/board_info.txt
-@@ -0,0 +1,7 @@
+@@ -0,0 +1,5 @@
 +Category: desktop
 +Board URL: https://www.asus.com/supportonly/prime%20b360m-c/helpdesk_knowledge/
-+ROM package: SOIC-8
 +ROM protocol: SPI
-+ROM socketed: n
 +Flashrom support: y
 +Release year: 2018
 diff --git a/src/mainboard/asus/b360m-c/bootblock.c b/src/mainboard/asus/b360m-c/bootblock.c

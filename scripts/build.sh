@@ -9,7 +9,8 @@
 #   A  SeaBIOS + libgfxinit                (primary first-boot image)
 #   B  SeaBIOS + FSP GOP                   (display fallback, VGA)
 #   C  EDK2 (coreboot default fork) + FSP GOP   (needs GitHub access)
-#   D  A + me_cleaner -S (HAP)             (modifies the IFD HAP strap!)
+#   D  A + HAP bit, me_cleaner -S equivalent (modifies the IFD HAP strap!
+#      location unverified on CNP-H, see DECISIONS.md D-028)
 #
 # Every variant produces:
 #   out/<name>.rom              full 16 MiB image (IFD + GbE + ME + BIOS)
@@ -35,13 +36,13 @@ declare -A CFG=(
 	[A]=A_seabios_libgfxinit
 	[B]=B_seabios_fspgop
 	[C]=C_edk2_fspgop
-	[D]=D_seabios_libgfxinit_me_cleaner
+	[D]=none
 )
 declare -A NAME=(
 	[A]="${BOARD}_A_seabios_libgfxinit"
 	[B]="${BOARD}_B_seabios_fspgop"
 	[C]="${BOARD}_C_edk2_fspgop"
-	[D]="${BOARD}_D_seabios_libgfxinit_ME_CLEANER_HAP"
+	[D]="${BOARD}_D_seabios_libgfxinit_ME_HAP_UNVERIFIED"
 )
 
 log() { echo "==> $*"; }
@@ -71,12 +72,13 @@ check_rom() {	# <variant> <rom>
 	cmp -s "$t/flashregion_2_intel_me.bin" "$TOP/blobs/me.bin" || die "$v: ME region differs"
 	cmp -s "$t/flashregion_3_gbe.bin" "$GBE" || die "$v: GbE region differs"
 	if [ "$v" = D ]; then
-		# me_cleaner -S may only flip the HAP strap in the descriptor
+		# only the HAP strap (PCHSTRP0 bit 16) may differ
 		local diffs
-		diffs="$(cmp -l "$t/flashregion_0_flashdescriptor.bin" "$TOP/blobs/descriptor.bin" | wc -l)"
+		diffs="$( (cmp -l "$t/flashregion_0_flashdescriptor.bin" \
+			"$TOP/blobs/descriptor.bin" || true) | wc -l)"
 		[ "$diffs" -eq 1 ] || die "D: expected exactly 1 changed descriptor byte, got $diffs"
 		cmp -l "$t/flashregion_0_flashdescriptor.bin" "$TOP/blobs/descriptor.bin" \
-			> "$OUT/$n.ifd-diff.txt"
+			> "$OUT/$n.ifd-diff.txt" || true
 	else
 		cmp -s "$t/flashregion_0_flashdescriptor.bin" "$TOP/blobs/descriptor.bin" ||
 			die "$v: flash descriptor differs from vendor"
@@ -90,6 +92,25 @@ check_rom() {	# <variant> <rom>
 for v in $VARIANTS; do
 	[ -n "${CFG[$v]:-}" ] || die "unknown variant $v"
 	n="${NAME[$v]}"
+	if [ "$v" = D ]; then
+		# D is variant A's image with only the HAP strap set
+		[ -f "$OUT/${NAME[A]}.rom" ] && [ -f "$TOP/build/A/coreboot.rom" ] ||
+			die "D needs variant A, run: scripts/build.sh A D"
+		cmp -s "$OUT/${NAME[A]}.rom" "$TOP/build/A/coreboot.rom" ||
+			die "out/${NAME[A]}.rom is stale, rebuild A"
+		log "D: setting HAP on variant A's image"
+		mkdir -p "$TOP/build/D/util/ifdtool"
+		cp "$TOP/build/A/util/ifdtool/ifdtool" "$TOP/build/D/util/ifdtool/"
+		cp "$TOP/build/A/cbfstool" "$TOP/build/D/"
+		python3 -I "$TOP/scripts/set_hap.py" "$OUT/${NAME[A]}.rom" "$OUT/$n.rom" \
+			> "$TOP/logs/build-D.log"
+		cp "$OUT/${NAME[A]}.config" "$OUT/$n.config"
+		check_rom D "$OUT/$n.rom"
+		cmp -s "$OUT/$n.bios-region.bin" "$OUT/${NAME[A]}.bios-region.bin" ||
+			die "D: BIOS region differs from A"
+		log "D: OK -> out/$n.rom"
+		continue
+	fi
 	if [ "$v" = C ] && ! github_reachable; then
 		log "C: GitHub not reachable, skipping EDK2 (see BRINGUP.md, 'Building variant C')"
 		cat > "$OUT/$n.SKIPPED.txt" <<-EOF

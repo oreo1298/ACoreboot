@@ -1,6 +1,6 @@
-From 70767c5a32351b5e6108725819c5e7f50a41c526 Mon Sep 17 00:00:00 2001
-From: ACoreboot port <noreply@anthropic.com>
-Date: Fri, 27 Nov 2026 02:33:20 +0000
+From 0f7f1fabed4d8f1407b1bf89ceef904931166308 Mon Sep 17 00:00:00 2001
+From: PRIME B360M-C port <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 02:45:02 +0000
 Subject: [PATCH 2/3] superio/nuvoton: Add NCT6793D
 
 Add a driver for the Nuvoton NCT6793D, found on e.g. the ASUS PRIME
@@ -14,7 +14,7 @@ B360M-C programs register 0xeb in it. LDNs 0x11 and 0x15, which exist on
 the NCT6796D, are left out since their presence on the NCT6793D has not
 been confirmed.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  src/superio/nuvoton/Makefile.mk          |   1 +
  src/superio/nuvoton/nct6793d/Kconfig     |   5 ++
