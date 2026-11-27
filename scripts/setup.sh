@@ -3,7 +3,7 @@
 #
 # Prepare ./coreboot for the ASUS PRIME B360M-C port. Idempotent.
 #
-#  1. host packages (apt, only if something is missing and we are root)
+#  1. host packages (apt or pacman, only if something is missing; uses sudo)
 #  2. coreboot at the pinned commit (shallow), branch asus-prime-b360m-c
 #  3. only the needed submodules (shallow)
 #  4. patches/*.patch applied with git am (re-applied only if they changed)
@@ -29,23 +29,41 @@ mkdir -p "$TOP/logs"
 log() { echo "==> $*"; }
 
 # ---------------------------------------------------------------- 1. packages
-PKGS="git make gcc g++ gnat bison flex m4 pkg-config zlib1g-dev libssl-dev uuid-dev
-      libncurses-dev libelf-dev curl xz-utils bzip2 unzip python3 acpica-tools nasm
-      libpci-dev golang-go"
-need_pkgs=0
-for c in git make gcc gnat bison flex m4 pkg-config curl python3 xz; do
-	command -v "$c" >/dev/null || need_pkgs=1
-done
-[ -f /usr/include/zlib.h ] || need_pkgs=1
-if [ $need_pkgs -eq 1 ]; then
-	if [ "$(id -u)" -eq 0 ] && command -v apt-get >/dev/null; then
-		log "installing host packages"
-		apt-get update -qq
+# Debian/Ubuntu (apt) and Arch Linux (pacman). On Arch, gcc-ada provides the
+# host GNAT needed to build the cross Ada compiler for libgfxinit.
+APT_PKGS="git make gcc g++ gnat bison flex m4 pkg-config zlib1g-dev libssl-dev uuid-dev
+	libncurses-dev libelf-dev curl xz-utils bzip2 unzip patch python3 acpica-tools nasm
+	libpci-dev golang-go"
+PACMAN_PKGS="base-devel git gcc-ada python curl xz bzip2 unzip zlib openssl ncurses
+	libelf util-linux-libs acpica nasm pciutils go"
+SUDO=""
+[ "$(id -u)" -eq 0 ] || SUDO="sudo"
+if command -v pacman >/dev/null; then
+	# shellcheck disable=SC2086
+	missing="$(pacman -T $PACMAN_PKGS || true)"
+	if [ -n "$missing" ]; then
+		log "installing host packages:" $missing
 		# shellcheck disable=SC2086
-		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $PKGS
-	else
-		echo "missing host tools; install: $PKGS" >&2
-		exit 1
+		$SUDO pacman -S --needed --noconfirm $missing || {
+			echo "pacman failed; if packages were not found, run" \
+			     "'sudo pacman -Syu' first and retry" >&2; exit 1; }
+	fi
+else
+	need_pkgs=0
+	for c in git make gcc g++ gnat bison flex m4 pkg-config curl python3 xz bzip2 unzip patch; do
+		command -v "$c" >/dev/null || need_pkgs=1
+	done
+	[ -f /usr/include/zlib.h ] && [ -f /usr/include/uuid/uuid.h ] || need_pkgs=1
+	if [ $need_pkgs -eq 1 ]; then
+		if command -v apt-get >/dev/null; then
+			log "installing host packages"
+			$SUDO apt-get update -qq
+			# shellcheck disable=SC2086
+			$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $APT_PKGS
+		else
+			echo "missing host tools; install the equivalent of: $APT_PKGS" >&2
+			exit 1
+		fi
 	fi
 fi
 
