@@ -95,7 +95,7 @@ each value with its source and confidence.
 | ALC887 audio (+ HDMI audio) | **codec detected and configured**; playback unverified | verbs copied from vendor |
 | PCIe x16, x1 ×2, PCI (ASM1083) | **ASM1083 enumerates (RP6)**; x1 slots on RP7/RP8 (inferred); x16 unverified | hardware lspci + SMBIOS |
 | PCIe clocks | all free-running, no CLKREQ# | safe default (mapping unknown) |
-| S3 | enabled (`HAVE_ACPI_RESUME`), unverified | coreboot/FSP |
+| S3 | **broken** (2026-11-27, C): suspends, but on wake the fans spin and there is no video. Cause not yet known (firmware log of the failed resume needed) | coreboot/FSP |
 | COM2, LPT, PS/2 | implemented, unverified | vendor DSDT resources |
 | Other Super I/O LDNs (ACPI, GPIO/WDT, deep sleep, port-80 UART) | left untouched (power-on state) | not exposed by the driver |
 | Fan control / HWM | not implemented (power-on defaults) | safety rule: no vendor fan values |

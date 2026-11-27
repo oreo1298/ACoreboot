@@ -66,5 +66,7 @@ restores ./coreboot with the patch series applied.
 - [x] M.2_1 = RP9 (NVMe), DIMM in DIMM_B2 (owner)
 - [x] DIMM_B2 = Channel-1-DIMM-1 = SPD 0x53 (dmidecode); SMBIOS slot names DIMM_A1..B2 added
 - [ ] Owner: test the C setup menu, VGA,
-      per-slot DIMM test, x1 slot cards, DP, S3 (BRINGUP §6)
+      per-slot DIMM test, x1 slot cards, DP (BRINGUP §6)
+- [ ] BUG: S3 resume fails (fans spin, no video). Waiting for: ping after wake, cbmem -c after
+      a reset-button reboot, /sys/power/mem_sleep, journalctl -b -1 -k
 
