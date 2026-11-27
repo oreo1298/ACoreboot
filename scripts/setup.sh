@@ -33,9 +33,9 @@ log() { echo "==> $*"; }
 # host GNAT needed to build the cross Ada compiler for libgfxinit.
 APT_PKGS="git make gcc g++ gnat bison flex m4 pkg-config zlib1g-dev libssl-dev uuid-dev
 	libncurses-dev libelf-dev curl xz-utils bzip2 unzip patch python3 acpica-tools nasm
-	libpci-dev golang-go"
+	libpci-dev golang-go imagemagick"
 PACMAN_PKGS="base-devel git gcc-ada python curl xz bzip2 unzip zlib openssl ncurses
-	libelf util-linux-libs acpica nasm pciutils go"
+	libelf util-linux-libs acpica nasm pciutils go imagemagick"
 SUDO=""
 [ "$(id -u)" -eq 0 ] || SUDO="sudo"
 if command -v pacman >/dev/null; then
@@ -54,6 +54,7 @@ else
 		command -v "$c" >/dev/null || need_pkgs=1
 	done
 	[ -f /usr/include/zlib.h ] && [ -f /usr/include/uuid/uuid.h ] || need_pkgs=1
+	command -v convert >/dev/null || need_pkgs=1	# ImageMagick, EDK2 boot logo
 	if [ $need_pkgs -eq 1 ]; then
 		if command -v apt-get >/dev/null; then
 			log "installing host packages"
