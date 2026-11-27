@@ -25,10 +25,12 @@ restores ./coreboot with the patch series applied.
 - [x] P2 VBT + DDI mapping (B=DP1, C=DP2, D=HDMI, E=VGA bridge)
 - [x] P2 memory: SPD A0/A2/A4/A6 (FSP default, no vendor override)
 - [x] P2 ACPI: vendor DSDT only gives SIO data
-- [~] P3 port written and building (patches 0001-0003); docs page pending
-- [~] P4 A, B built+checked; C (EDK2, GitHub reachable via git) building; D pending; abuild/lint/checkpatch pending
-- [ ] P5 independent audit
-- [ ] P6 docs (BRINGUP, DECISIONS, SUMMARY, Documentation page), patches/, ROMs, push
+- [x] P3 port written: patches 0001 intelp2m cnl-h, 0002 superio nct6793d, 0003 board + Documentation page
+- [x] P4 A/B/C/D built + region checks; scripts/check.sh: abuild, lint-stable, checkpatch 0/0, gpio_check all PASS
+- [~] DoD#1 fresh-clone test: running (logs/fresh-clone.log, clone in scratchpad/fresh)
+- [~] P5 independent audit running (report -> scratchpad/audit_report.md); then fix/justify in DECISIONS
+- [~] P6 BRINGUP/DECISIONS/SUMMARY drafted; remaining: audit fixes, final rebuild (scripts/build.sh),
+      fill SUMMARY hashes, `git add -f out/`, push
 
 ## Key facts so far
 - Flash: 16 MiB, W25Q128 (JID ef4018) / GD25Q128 (c84018) in VSCC table.
