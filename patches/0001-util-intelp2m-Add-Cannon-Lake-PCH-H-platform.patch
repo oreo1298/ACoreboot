@@ -1,0 +1,259 @@
+From 6ceb026466937443f8acc10c39a687c6e72a70ff Mon Sep 17 00:00:00 2001
+From: ACoreboot port <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 02:21:40 +0000
+Subject: [PATCH 1/3] util/intelp2m: Add Cannon Lake PCH-H platform
+
+The `cnl` platform models Cannon Lake PCH-LP, where only community 0
+(GPP_A, GPP_B, GPP_G) uses the PWROK/DEEP/PLTRST/RSMRST encoding of
+PADRSTCFG and every other community, including GPD, uses
+RSMRST/DEEP/PLTRST.
+
+Cannon Lake PCH-H (300-series desktop chipsets such as B360/H370/Q370)
+is the other way around: all GPP communities use RSMRST/DEEP/PLTRST and
+only the GPD community uses PWROK/DEEP/PLTRST/RSMRST, as described by
+rst_map and rst_map_gpd in soc/intel/cannonlake/gpio_cnp_h.c. Running
+`-p cnl` on a PCH-H inteltool dump therefore yields wrong reset sources
+for GPP_A, GPP_B, GPP_G and GPD pads.
+
+Add a `cnl-h` platform that reuses the Cannon Lake register decoding and
+only overrides the reset source remapping, plus a test for both
+encodings.
+
+TEST=go test ./... in util/intelp2m
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ Documentation/util/intelp2m/index.md      |  1 +
+ util/intelp2m/cli/options.go              |  3 +-
+ util/intelp2m/config/p2m/config.go        | 22 +++++----
+ util/intelp2m/platforms/cnlh/cnlh.go      | 52 ++++++++++++++++++++
+ util/intelp2m/platforms/cnlh/cnlh_test.go | 60 +++++++++++++++++++++++
+ util/intelp2m/platforms/platforms.go      |  3 ++
+ 6 files changed, 130 insertions(+), 11 deletions(-)
+ create mode 100644 util/intelp2m/platforms/cnlh/cnlh.go
+ create mode 100644 util/intelp2m/platforms/cnlh/cnlh_test.go
+
+diff --git a/Documentation/util/intelp2m/index.md b/Documentation/util/intelp2m/index.md
+index 851d5c52..ad6de96d 100644
+--- a/Documentation/util/intelp2m/index.md
++++ b/Documentation/util/intelp2m/index.md
+@@ -71,6 +71,7 @@ The utility supports the following chipsets from Intel:
+ * `adl` - Alder Lake PCH
+ * `apl` - Apollo Lake SoC
+ * `cnl` - CannonLake-LP or Whiskeylake/Coffeelake/Cometlake-U SoC
++* `cnl-h` - CannonLake-H PCH (300 series) with Coffeelake-S/H SoC
+ * `ebg` - Emmitsburg PCH with Xeon SP
+ * `ehl` - Elkhart Lake SoC
+ * `jsl` - Jasper Lake SoC
+diff --git a/util/intelp2m/cli/options.go b/util/intelp2m/cli/options.go
+index 0486efa0..9bb48c69 100644
+--- a/util/intelp2m/cli/options.go
++++ b/util/intelp2m/cli/options.go
+@@ -12,10 +12,11 @@ import (
+ var name = filepath.Base(os.Args[0])
+ 
+ const usagePlatform = `usage: -platform <type>
+-    type: adl | apl | cnl | ebg | ehl | jsl | lbg | mtl | snr | tgl | ?
++    type: adl | apl | cnl | cnl-h | ebg | ehl | jsl | lbg | mtl | snr | tgl | ?
+         adl - Alder Lake PCH
+         apl - Apollo Lake SoC
+         cnl - CannonLake-LP or Whiskeylake/Coffeelake/Cometlake-U SoC
++        cnl-h - CannonLake-H PCH (300 series) with Coffeelake-S/H SoC
+         ebg - Emmitsburg PCH with Xeon SP
+         ehl - Elkhart Lake SoC
+         jsl - Jasper Lake SoC
+diff --git a/util/intelp2m/config/p2m/config.go b/util/intelp2m/config/p2m/config.go
+index 6d3aa1be..a2d6a57e 100644
+--- a/util/intelp2m/config/p2m/config.go
++++ b/util/intelp2m/config/p2m/config.go
+@@ -18,6 +18,7 @@ const (
+ 	Meteor
+ 	Emmitsburg
+ 	Elkhart
++	CannonH
+ )
+ 
+ const (
+@@ -28,16 +29,17 @@ const (
+ )
+ 
+ var platforms = map[string]PlatformType{
+-	"snr": Sunrise,
+-	"lbg": Lewisburg,
+-	"apl": Apollo,
+-	"cnl": Cannon,
+-	"tgl": Tiger,
+-	"adl": Alder,
+-	"jsl": Jasper,
+-	"mtl": Meteor,
+-	"ebg": Emmitsburg,
+-	"ehl": Elkhart,
++	"snr":   Sunrise,
++	"lbg":   Lewisburg,
++	"apl":   Apollo,
++	"cnl":   Cannon,
++	"cnl-h": CannonH,
++	"tgl":   Tiger,
++	"adl":   Alder,
++	"jsl":   Jasper,
++	"mtl":   Meteor,
++	"ebg":   Emmitsburg,
++	"ehl":   Elkhart,
+ }
+ 
+ var fields = map[string]FieldType{
+diff --git a/util/intelp2m/platforms/cnlh/cnlh.go b/util/intelp2m/platforms/cnlh/cnlh.go
+new file mode 100644
+index 00000000..5a2dcecd
+--- /dev/null
++++ b/util/intelp2m/platforms/cnlh/cnlh.go
+@@ -0,0 +1,52 @@
++package cnlh
++
++import (
++	"strings"
++
++	"review.coreboot.org/coreboot.git/util/intelp2m/logs"
++	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/cnl"
++	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/common"
++	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/common/register/bits"
++)
++
++// Cannon Lake PCH-H (300-series desktop chipsets, CNP-H) uses the same pad
++// configuration registers as Cannon Lake PCH-LP, but the PADRSTCFG mapping
++// differs: every GPP community uses 00 = RSMRST, 01 = DEEP, 10 = PLTRST,
++// while only the GPD community uses 00 = PWROK, 01 = DEEP, 10 = PLTRST,
++// 11 = RSMRST (see rst_map and rst_map_gpd in
++// src/soc/intel/cannonlake/gpio_cnp_h.c).
++var GPPGroups = append([]string{
++	"ESPI_CLK_LOOPBK", "GSPI0_CLK_LOOPBK", "GSPI1_CLK_LOOPBK",
++}, cnl.GPPGroups...)
++
++var remapping = common.ResetSources{
++	0b00: bits.RstCfgRSMRST << bits.DW0PadRstCfg,
++	0b01: bits.RstCfgDEEP << bits.DW0PadRstCfg,
++	0b10: bits.RstCfgPLTRST << bits.DW0PadRstCfg,
++}
++
++type BasePlatform struct {
++	// based on the Cannon Lake PCH-LP platform
++	cnl.BasePlatform
++}
++
++func InitBasePlatform(dw0, dw0mask uint32, dw1, dw1mask uint32) BasePlatform {
++	return BasePlatform{cnl.InitBasePlatform(dw0, dw0mask, dw1, dw1mask)}
++}
++
++func GetPlatform(dw0, dw1 uint32) common.PlatformIf {
++	p := InitBasePlatform(dw0, cnl.DW0Mask, dw1, cnl.DW1Mask)
++	return &p
++}
++
++// Override BasePlatform.RemapResetSource()
++func (p *BasePlatform) RemapResetSource(m *common.Macro) {
++	if strings.HasPrefix(m.GetPadId(), "GPD") {
++		// The GPD community uses the common PWROK/DEEP/PLTRST/RSMRST
++		// encoding, no remapping required.
++		return
++	}
++	if err := p.UpdateResetSource(remapping); err != nil {
++		logs.Errorf("remap reset source for %s: %v", m.GetPadId(), err)
++	}
++}
+diff --git a/util/intelp2m/platforms/cnlh/cnlh_test.go b/util/intelp2m/platforms/cnlh/cnlh_test.go
+new file mode 100644
+index 00000000..0a591e9a
+--- /dev/null
++++ b/util/intelp2m/platforms/cnlh/cnlh_test.go
+@@ -0,0 +1,60 @@
++package cnlh_test
++
++import (
++	"testing"
++
++	"review.coreboot.org/coreboot.git/util/intelp2m/config/p2m"
++	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/common"
++	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/test"
++)
++
++func TestGenMacro(t *testing.T) {
++	p2m.Config.Platform = p2m.CannonH
++	test.Suite{
++		{
++			// PADRSTCFG = 00: RSMRST in all GPP communities on PCH-H
++			Pad: test.Pad{ID: "GPP_A1", DW0: 0x00000400, DW1: 0x00000000, Ownership: common.Acpi},
++			Macro: test.Macro{
++				Short: "PAD_CFG_NF(GPP_A1, NONE, RSMRST, NF1),",
++				Long:  "_PAD_CFG_STRUCT(GPP_A1, PAD_FUNC(NF1) | PAD_RESET(RSMRST), 0),",
++			},
++		},
++		{
++			Pad: test.Pad{ID: "GPP_B12", DW0: 0x80000400, DW1: 0x00000000, Ownership: common.Acpi},
++			Macro: test.Macro{
++				Short: "PAD_CFG_NF(GPP_B12, NONE, PLTRST, NF1),",
++				Long:  "_PAD_CFG_STRUCT(GPP_B12, PAD_FUNC(NF1) | PAD_RESET(PLTRST), 0),",
++			},
++		},
++		{
++			Pad: test.Pad{ID: "GPP_G3", DW0: 0x00000400, DW1: 0x00000000, Ownership: common.Acpi},
++			Macro: test.Macro{
++				Short: "PAD_CFG_NF(GPP_G3, NONE, RSMRST, NF1),",
++				Long:  "_PAD_CFG_STRUCT(GPP_G3, PAD_FUNC(NF1) | PAD_RESET(RSMRST), 0),",
++			},
++		},
++		{
++			Pad: test.Pad{ID: "GPP_E9", DW0: 0x40000400, DW1: 0x00000000, Ownership: common.Acpi},
++			Macro: test.Macro{
++				Short: "PAD_CFG_NF(GPP_E9, NONE, DEEP, NF1),",
++				Long:  "_PAD_CFG_STRUCT(GPP_E9, PAD_FUNC(NF1) | PAD_RESET(DEEP), 0),",
++			},
++		},
++		{
++			// PADRSTCFG = 00: PWROK in the GPD community
++			Pad: test.Pad{ID: "GPD4", DW0: 0x00000400, DW1: 0x00000000, Ownership: common.Acpi},
++			Macro: test.Macro{
++				Short: "PAD_CFG_NF(GPD4, NONE, PWROK, NF1),",
++				Long:  "_PAD_CFG_STRUCT(GPD4, PAD_FUNC(NF1), 0),",
++			},
++		},
++		{
++			// PADRSTCFG = 11: RSMRST in the GPD community
++			Pad: test.Pad{ID: "GPD2", DW0: 0xc0000400, DW1: 0x00000000, Ownership: common.Acpi},
++			Macro: test.Macro{
++				Short: "PAD_CFG_NF(GPD2, NONE, RSMRST, NF1),",
++				Long:  "_PAD_CFG_STRUCT(GPD2, PAD_FUNC(NF1) | PAD_RESET(RSMRST), 0),",
++			},
++		},
++	}.Run(t, "INTEL-CANNON-LAKE-PCH-H/RESET-SOURCE-MAPPING")
++}
+diff --git a/util/intelp2m/platforms/platforms.go b/util/intelp2m/platforms/platforms.go
+index 2ac17336..7c83bdb2 100644
+--- a/util/intelp2m/platforms/platforms.go
++++ b/util/intelp2m/platforms/platforms.go
+@@ -7,6 +7,7 @@ import (
+ 	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/adl"
+ 	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/apl"
+ 	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/cnl"
++	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/cnlh"
+ 	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/common"
+ 	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/ebg"
+ 	"review.coreboot.org/coreboot.git/util/intelp2m/platforms/ehl"
+@@ -25,6 +26,7 @@ var platformConstructorMap = map[p2m.PlatformType]Constructor{
+ 	p2m.Alder:      adl.GetPlatform,
+ 	p2m.Apollo:     apl.GetPlatform,
+ 	p2m.Cannon:     cnl.GetPlatform,
++	p2m.CannonH:    cnlh.GetPlatform,
+ 	p2m.Sunrise:    snr.GetPlatform,
+ 	p2m.Tiger:      tgl.GetPlatform,
+ 	p2m.Jasper:     jsl.GetPlatform,
+@@ -38,6 +40,7 @@ var GppMap = map[p2m.PlatformType][]string{
+ 	p2m.Alder:      adl.GPPGroups,
+ 	p2m.Apollo:     apl.GPPGroups,
+ 	p2m.Cannon:     cnl.GPPGroups,
++	p2m.CannonH:    cnlh.GPPGroups,
+ 	p2m.Sunrise:    snr.GPPGroups,
+ 	p2m.Tiger:      tgl.GPPGroups,
+ 	p2m.Jasper:     jsl.GPPGroups,
+-- 
+2.43.0
+

@@ -13,20 +13,20 @@ restores ./coreboot with the patch series applied.
 
 ## Phase checklist
 - [x] P0 repo skeleton, .gitignore, vendor capsule committed
-- [ ] P0 toolchain (crossgcc-i386 + nasm + iasl, coreboot mirror `-m`)  — log: logs/toolchain.log
-- [ ] P0 reference build of in-tree CNL PCH-H board (asrock/h370m) unmodified
-- [ ] P1 reference board survey (asrock/h370m, prodrive/hermes, intel/coffeelake_rvp cfl_s, others)
-- [ ] P2 IFD/regions/ME/straps -> blobs/            (done in scratch, scripts pending)
-- [ ] P2 Boot Guard check                           (done: FIT has only 4 microcode entries)
-- [ ] P2 GPIO table from vendor PEIM 2accd044-...   (found, converter pending)
-- [ ] P2 PCI / USB / SATA mapping
-- [ ] P2 Super I/O (NCT6793D @0x2E, HWM 0x290)      (identified)
-- [ ] P2 HDA verbs from vendor image
-- [ ] P2 VBT + DDI mapping
-- [ ] P2 memory topology / SPD addresses
-- [ ] P2 ACPI board bits
-- [ ] P3 port written (superio driver commit, board commit)
-- [ ] P4 variants A/B/C/D built, abuild/lint/checkpatch/cbfstool/ifdtool checks
+- [x] P0 toolchain: crossgcc-i386 (gcc 15.2.0) + nasm + iasl built with `BUILDGCC_OPTIONS=-m` (~10 min)
+- [x] P0 reference build: asrock/h370m-itx_ac unmodified builds (logs/ref-h370m.log)
+- [x] P1 survey: template asrock/h370m-itx_ac; refs cfl_s RVP, asus/h610m-k (ASUS/Nuvoton style), asrock/h110m (DDI-E VGA)
+- [x] P2 IFD/regions/ME -> blobs/ (scripts/extract_blobs.sh)
+- [x] P2 Boot Guard: FIT has only 4 microcode entries -> not provisioned
+- [x] P2 GPIO: vendor_gpio.py -> intelp2m -p cnl-h -> gen_gpio_c.py; gpio_check.py 0 unexplained
+- [x] P2 PCI/USB/SATA mapping (SMBIOS type 8/9 + manual; see DECISIONS D-012..D-015)
+- [x] P2 Super I/O NCT6793D: vendor PEI init table decoded (D-010)
+- [x] P2 HDA verbs from vendor PEIM 60c33d7a
+- [x] P2 VBT + DDI mapping (B=DP1, C=DP2, D=HDMI, E=VGA bridge)
+- [x] P2 memory: SPD A0/A2/A4/A6 (FSP default, no vendor override)
+- [x] P2 ACPI: vendor DSDT only gives SIO data
+- [~] P3 port written and building (patches 0001-0003); docs page pending
+- [~] P4 A, B built+checked; C (EDK2, GitHub reachable via git) building; D pending; abuild/lint/checkpatch pending
 - [ ] P5 independent audit
 - [ ] P6 docs (BRINGUP, DECISIONS, SUMMARY, Documentation page), patches/, ROMs, push
 
@@ -46,4 +46,9 @@ restores ./coreboot with the patch series applied.
   GPIO_INIT_CONFIG table covering every CNP-H pad (A..K, GPD).
 
 ## Toolchain record
-- (pending)
+- coreboot crossgcc @ c49935a4: GCC 15.2.0, binutils 2.46.1, NASM 3.02, IASL 20251212 (DECISIONS D-024)
+
+## Working notes
+- coreboot tree: branch asus-prime-b360m-c in ./coreboot, commits on top of c49935a4; regenerate
+  patches with `git -C coreboot format-patch -o ../patches c49935a4`.
+- git to github.com works through the proxy (web pages 403); EDK2 clone is ~6+ GB.

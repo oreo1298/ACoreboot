@@ -1,0 +1,862 @@
+From 951e1679cd07072738635f6adc0bfb8ee253a473 Mon Sep 17 00:00:00 2001
+From: ACoreboot port <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 02:33:20 +0000
+Subject: [PATCH 3/3] mb/asus: Add PRIME B360M-C (WIP)
+
+---
+ src/mainboard/asus/b360m-c/Kconfig           |  33 ++
+ src/mainboard/asus/b360m-c/Kconfig.name      |   4 +
+ src/mainboard/asus/b360m-c/Makefile.mk       |  10 +
+ src/mainboard/asus/b360m-c/board_info.txt    |   7 +
+ src/mainboard/asus/b360m-c/bootblock.c       |  39 +++
+ src/mainboard/asus/b360m-c/data.vbt          | Bin 0 -> 4449 bytes
+ src/mainboard/asus/b360m-c/devicetree.cb     | 168 ++++++++++
+ src/mainboard/asus/b360m-c/dsdt.asl          |  27 ++
+ src/mainboard/asus/b360m-c/gma-mainboard.ads |  23 ++
+ src/mainboard/asus/b360m-c/gpio.c            | 321 +++++++++++++++++++
+ src/mainboard/asus/b360m-c/hda_verb.c        |  47 +++
+ src/mainboard/asus/b360m-c/include/gpio.h    |   8 +
+ src/mainboard/asus/b360m-c/romstage.c        |  30 ++
+ 13 files changed, 717 insertions(+)
+ create mode 100644 src/mainboard/asus/b360m-c/Kconfig
+ create mode 100644 src/mainboard/asus/b360m-c/Kconfig.name
+ create mode 100644 src/mainboard/asus/b360m-c/Makefile.mk
+ create mode 100644 src/mainboard/asus/b360m-c/board_info.txt
+ create mode 100644 src/mainboard/asus/b360m-c/bootblock.c
+ create mode 100644 src/mainboard/asus/b360m-c/data.vbt
+ create mode 100644 src/mainboard/asus/b360m-c/devicetree.cb
+ create mode 100644 src/mainboard/asus/b360m-c/dsdt.asl
+ create mode 100644 src/mainboard/asus/b360m-c/gma-mainboard.ads
+ create mode 100644 src/mainboard/asus/b360m-c/gpio.c
+ create mode 100644 src/mainboard/asus/b360m-c/hda_verb.c
+ create mode 100644 src/mainboard/asus/b360m-c/include/gpio.h
+ create mode 100644 src/mainboard/asus/b360m-c/romstage.c
+
+diff --git a/src/mainboard/asus/b360m-c/Kconfig b/src/mainboard/asus/b360m-c/Kconfig
+new file mode 100644
+index 00000000..9ad70c1e
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/Kconfig
+@@ -0,0 +1,33 @@
++## SPDX-License-Identifier: GPL-2.0-only
++
++config BOARD_ASUS_B360M_C
++	select BOARD_ROMSIZE_KB_16384
++	select HAVE_ACPI_RESUME
++	select HAVE_ACPI_TABLES
++	select INTEL_GMA_HAVE_VBT
++	select MAINBOARD_HAS_LIBGFXINIT
++	select MAINBOARD_USES_IFD_GBE_REGION
++	select SOC_INTEL_CANNONLAKE_PCH_H
++	select SOC_INTEL_COFFEELAKE
++	select SOC_INTEL_COMMON_BLOCK_HDA_VERB
++	select SUPERIO_NUVOTON_COMMON_COM_A
++	select SUPERIO_NUVOTON_NCT6793D
++
++if BOARD_ASUS_B360M_C
++
++config MAINBOARD_DIR
++	default "asus/b360m-c"
++
++config MAINBOARD_PART_NUMBER
++	default "PRIME B360M-C"
++
++config DIMM_SPD_SIZE
++	default 512 # DDR4
++
++config DIMM_MAX
++	default 4
++
++config CBFS_SIZE
++	default 0xc00000
++
++endif
+diff --git a/src/mainboard/asus/b360m-c/Kconfig.name b/src/mainboard/asus/b360m-c/Kconfig.name
+new file mode 100644
+index 00000000..0df6ddf7
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/Kconfig.name
+@@ -0,0 +1,4 @@
++## SPDX-License-Identifier: GPL-2.0-only
++
++config BOARD_ASUS_B360M_C
++	bool "PRIME B360M-C"
+diff --git a/src/mainboard/asus/b360m-c/Makefile.mk b/src/mainboard/asus/b360m-c/Makefile.mk
+new file mode 100644
+index 00000000..32ea6e19
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/Makefile.mk
+@@ -0,0 +1,10 @@
++## SPDX-License-Identifier: GPL-2.0-only
++
++bootblock-y += bootblock.c
++bootblock-y += gpio.c
++
++romstage-y += romstage.c
++
++ramstage-y += hda_verb.c
++
++ramstage-$(CONFIG_MAINBOARD_USE_LIBGFXINIT) += gma-mainboard.ads
+diff --git a/src/mainboard/asus/b360m-c/board_info.txt b/src/mainboard/asus/b360m-c/board_info.txt
+new file mode 100644
+index 00000000..7ffcaf83
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/board_info.txt
+@@ -0,0 +1,7 @@
++Category: desktop
++Board URL: https://www.asus.com/supportonly/prime%20b360m-c/helpdesk_knowledge/
++ROM package: SOIC-8
++ROM protocol: SPI
++ROM socketed: n
++Flashrom support: y
++Release year: 2018
+diff --git a/src/mainboard/asus/b360m-c/bootblock.c b/src/mainboard/asus/b360m-c/bootblock.c
+new file mode 100644
+index 00000000..a41c1d93
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/bootblock.c
+@@ -0,0 +1,39 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <bootblock_common.h>
++#include <device/pnp_ops.h>
++#include <superio/nuvoton/common/nuvoton.h>
++#include <superio/nuvoton/nct6793d/nct6793d.h>
++
++#include "include/gpio.h"
++
++#define GLOBAL_DEV	PNP_DEV(0x2e, 0)
++#define SERIAL_DEV	PNP_DEV(0x2e, NCT6793D_SP1)
++#define LDN12_DEV	PNP_DEV(0x2e, NCT6793D_LDN12)
++
++void bootblock_mainboard_early_init(void)
++{
++	/*
++	 * Multi-function pin selection. These are the read-modify-write
++	 * operations done by the NCT6793D PEI module of the vendor firmware
++	 * (BIOS 3202). Do not change them without the board schematics.
++	 */
++	nuvoton_pnp_enter_conf_state(GLOBAL_DEV);
++	pnp_unset_and_set_config(GLOBAL_DEV, 0x27, 1 << 2, 0);
++	pnp_unset_and_set_config(GLOBAL_DEV, 0x2a, 1 << 6, 0);
++	pnp_unset_and_set_config(GLOBAL_DEV, 0x27, 1 << 4, 1 << 4);
++	pnp_unset_and_set_config(GLOBAL_DEV, 0x2f, 1 << 1, 0);
++	pnp_unset_and_set_config(GLOBAL_DEV, 0x2a, 3 << 0, 0);
++	pnp_set_logical_device(LDN12_DEV);
++	pnp_unset_and_set_config(LDN12_DEV, 0xeb, 3 << 4, 0);
++	nuvoton_pnp_exit_conf_state(GLOBAL_DEV);
++
++	/* COM1 header (UART A). Also routes UART A to its pins (CR 0x2a[7]). */
++	nuvoton_enable_serial(SERIAL_DEV, CONFIG_TTYS0_BASE);
++}
++
++void bootblock_mainboard_init(void)
++{
++	/* The vendor firmware applies its GPIO table early in PEI, too. */
++	mainboard_configure_gpios();
++}
+diff --git a/src/mainboard/asus/b360m-c/data.vbt b/src/mainboard/asus/b360m-c/data.vbt
+new file mode 100644
+index 0000000000000000000000000000000000000000..83b5e50f2eadd5ed2db4276f7c634ae0d7304325
+GIT binary patch
+literal 4449
+zcmeHKZ){Ul6hH61{=M(L?)8m8S8*Qx1iHz#*9`_PBfPHNSXrU%I+iV(tb<lrENqNn
+zhLTWp8WN*v;-8>F-A998Nc?C_NQg>eRH6|-5&5PenyA4~0`<H<YaIkvNkB22?c8(j
+z?R~#{&bjB^d*0gNo*~Q(j3y!jy=YSoG#K~u)ZR)x@nmK!78#0+^(2zf0lWmuLG$0Z
+z0+8dl1}Us*;rM}>d?7U0M6e0mIk{(|kZ+6S4?R6IIfbcc93y-8<_r1h@tJ%MGsD{>
+zXkf~$=kP=!hr15%-;<y2LITogHikF0c5Flpx3$y17T!dv))nsT+Vq&rV!hGi&Qv@R
+z8Hy)&VR8^-@k}I>>D}3r7{%0JvOnGvAL@<Ctl~y=a_Y$R#8dlbFcfXVc3Pvw1T{^@
+z=;ZWND@F<h95m(}!omEZ{PZ*VT&v6skh9=%Z~&YW>Zpb5?EnrP90(2tbOc=iRKNkC
+z10aA>S+%Mtz;ESvnzG&lu0VAhfZzqQuN%+WM96S43yR|T&0`I@jfD+TIJ6YfX=!_!
+z!)yKsG@Cay<j_*gX$W7NXv^(sw4${raA+$AngXBhqeUTPPZLcjYV<|Z7Dn%>6v*pq
+z&(e~%_Z)Br0r)r#4tN_ODTLstz{5+z7HD>y2gQrf;Z>lIc$D}XCxc7GKM?;){0Fhq
+z#h{M3fp`sZ3-M;+2=M^%ZsIZG31Zh_xK`$iKs!NH<ZS7;Bq$DewF!!+?D13fxc3*@
+zbRuR;(U#_54NbZ1cEgSGmjNi3JzEV6bV4AvxtNXAZ_9)!1tDekhe#T+8nOH3vNuaz
+z-b|3Y)w0ixgtn+$zTY*e9(K^1D0sT(tX<p<aPB=>fLUOE`^6+5RcRq9O^27g3$CE$
+zy1RQJ1UJin^OvA;GCcGXf5FY*g8M3WqW-_B88K6q__N|#O*O0kpnVX5#SvK94;Q_~
+z5?+2-@nlz9zct?3$RkfsPVyc)7<4f1ObPlS1ObS_T37~INSXDM$2?~j8ByC1BGgr`
+z?nTd6I-wwecT~Cy%4s5irq@A;GMr%QbBw*n@B^lP%-ClPe`ac#F|UYiq8bs|fQSc0
+z^#zf=BI1Xl`iaQC67hFYbxX`I;buvVODrSd5lMYnVsA+Jk)(bhvF{|jE~#}gYmjl9
+ztfpo5xQxeT^);EjBjY(){Z?k*%joo}D|~E~54Zc&Q6Jmulbcm%k-y9p{XVny@Jvf|
+z_Kfh7DX(%0NoU=9y5(-&l+I&x*&9wuD2(t+Bh1$!ghy6lsJP4uO=IUV>%ybGqT_sN
+zgj@sY5m=`MPIOubfzD%sRWgy8;4l!nsc^cz7g{r%OoOItQ}q=a=s`o5W}U&B5N0tQ
+zRCMJp2wche4-npOo4uS4uG2?OR&C%)E)zj_ovFcw{%yLp=S;h<pRFRetO`gPcGeQf
+zCsz%hPD7*CSF-oQh-AsUJIRz<;&8OJG@lJN>KfX6LA&WFnH8#3bl2iVsJl2nb!H7A
+zG#kDH5Q4L0)+y4wbFPMbc)Mx-LV9ksmU?SN1wjC_JeG7<EeKk(em*;w(*kL$k}zx#
+zC>@FJG$&02*+Ot)4PIOc!h8x>Xp$DKdQqbHk!&csx0v~0B>C;Ln(rzG4sL1DM_Q_T
+zAs8P;h8Of@v-Eq>q(im{^;t#n8&8>gA<!X8BqjP%W2x~2`NFR8{rUev$8hTJ>Cxlh
+z+Hsz0^wW2*E#E}^O|)S-Jl{uV#;J1OO_x^=HgIpkj{>x69Gs}o{h?anUik31=d#28
+Ia5l{N6Y6Hk9{>OV
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/mainboard/asus/b360m-c/devicetree.cb b/src/mainboard/asus/b360m-c/devicetree.cb
+new file mode 100644
+index 00000000..6df11beb
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/devicetree.cb
+@@ -0,0 +1,168 @@
++## SPDX-License-Identifier: GPL-2.0-only
++
++chip soc/intel/cannonlake
++	register "eist_enable" = "true"
++
++	# GPE configuration. The vendor firmware has no GPIO based GPE handlers;
++	# routing taken from asrock/h370m-itx_ac.
++	register "gpe0_dw0" = "GPP_C"
++	register "gpe0_dw1" = "GPP_K"
++	register "gpe0_dw2" = "GPP_E"
++
++	# The CLKSRC/CLKREQ to root port mapping is not known yet, so run every
++	# PCIe reference clock free and do not use CLKREQ#.
++	register "PcieClkSrcUsage" = "{
++		[0]  = PCIE_CLK_FREE, [1]  = PCIE_CLK_FREE,
++		[2]  = PCIE_CLK_FREE, [3]  = PCIE_CLK_FREE,
++		[4]  = PCIE_CLK_FREE, [5]  = PCIE_CLK_FREE,
++		[6]  = PCIE_CLK_FREE, [7]  = PCIE_CLK_FREE,
++		[8]  = PCIE_CLK_FREE, [9]  = PCIE_CLK_FREE,
++		[10] = PCIE_CLK_FREE, [11] = PCIE_CLK_FREE,
++		[12] = PCIE_CLK_FREE, [13] = PCIE_CLK_FREE,
++		[14] = PCIE_CLK_FREE, [15] = PCIE_CLK_FREE,
++	}"
++	register "PcieClkSrcClkReq" = "{
++		[0]  = PCIE_CLK_NOTUSED, [1]  = PCIE_CLK_NOTUSED,
++		[2]  = PCIE_CLK_NOTUSED, [3]  = PCIE_CLK_NOTUSED,
++		[4]  = PCIE_CLK_NOTUSED, [5]  = PCIE_CLK_NOTUSED,
++		[6]  = PCIE_CLK_NOTUSED, [7]  = PCIE_CLK_NOTUSED,
++		[8]  = PCIE_CLK_NOTUSED, [9]  = PCIE_CLK_NOTUSED,
++		[10] = PCIE_CLK_NOTUSED, [11] = PCIE_CLK_NOTUSED,
++		[12] = PCIE_CLK_NOTUSED, [13] = PCIE_CLK_NOTUSED,
++		[14] = PCIE_CLK_NOTUSED, [15] = PCIE_CLK_NOTUSED,
++	}"
++
++	device domain 0 on
++		device ref peg0 on
++			smbios_slot_desc "SlotTypePciExpressGen3X16" "SlotLengthLong"
++				"PCIEX16" "SlotDataBusWidth16X"
++		end
++		device ref igpu on end
++		device ref thermal on end
++		device ref xhci on
++			# Port to connector mapping from the vendor SMBIOS tables. The
++			# over-current pin mapping is not known, so OC is not used.
++			register "usb2_ports" = "{
++				[0]  = USB2_PORT_MID(OC_SKIP),	/* U31G2_12, rear */
++				[1]  = USB2_PORT_MID(OC_SKIP),	/* U31G2_12, rear */
++				[2]  = USB2_PORT_MID(OC_SKIP),	/* U31G2_34, rear */
++				[3]  = USB2_PORT_MID(OC_SKIP),	/* U31G2_34, rear */
++				[4]  = USB2_PORT_MID(OC_SKIP),	/* U31G1_56 header */
++				[5]  = USB2_PORT_MID(OC_SKIP),	/* U31G1_56 header */
++				[6]  = USB2_PORT_MID(OC_SKIP),	/* USB78 header */
++				[7]  = USB2_PORT_MID(OC_SKIP),	/* USB78 header */
++				[8]  = USB2_PORT_MID(OC_SKIP),	/* LAN_USB910, rear */
++				[9]  = USB2_PORT_MID(OC_SKIP),	/* LAN_USB910, rear */
++				[10] = USB2_PORT_MID(OC_SKIP),	/* USB1112 header */
++				[11] = USB2_PORT_MID(OC_SKIP),	/* USB1112 header */
++				[12] = USB2_PORT_EMPTY,
++				[13] = USB2_PORT_EMPTY,
++			}"
++			register "usb3_ports" = "{
++				[0] = USB3_PORT_DEFAULT(OC_SKIP),	/* U31G2_12, rear */
++				[1] = USB3_PORT_DEFAULT(OC_SKIP),	/* U31G2_12, rear */
++				[2] = USB3_PORT_DEFAULT(OC_SKIP),	/* U31G2_34, rear */
++				[3] = USB3_PORT_DEFAULT(OC_SKIP),	/* U31G2_34, rear */
++				[4] = USB3_PORT_DEFAULT(OC_SKIP),	/* U31G1_56 header */
++				[5] = USB3_PORT_DEFAULT(OC_SKIP),	/* U31G1_56 header */
++				[6] = USB3_PORT_EMPTY,
++				[7] = USB3_PORT_EMPTY,
++				[8] = USB3_PORT_EMPTY,
++				[9] = USB3_PORT_EMPTY,
++			}"
++		end
++		device ref heci1 on end
++		device ref sata on
++			# SATA6G_1 .. SATA6G_6; M.2_1 in SATA mode shares SATA6G_2
++			register "SataPortsEnable" = "{
++				[0] = 1,
++				[1] = 1,
++				[2] = 1,
++				[3] = 1,
++				[4] = 1,
++				[5] = 1,
++			}"
++		end
++
++		# Root ports are assigned to HSIO lanes by the soft straps. Only the
++		# slots below are known (vendor SMBIOS type 9); the others are left
++		# enabled so that FSP can train whatever the straps assign to them
++		# (e.g. the M.2 sockets) and disable the rest.
++		device ref pcie_rp1 on end
++		device ref pcie_rp2 on end
++		device ref pcie_rp3 on end
++		device ref pcie_rp4 on
++			register "PcieRpSlotImplemented[3]" = "true"
++			smbios_slot_desc "SlotTypePciExpressGen3X1" "SlotLengthShort"
++				"PCIEX1_1" "SlotDataBusWidth1X"
++		end
++		device ref pcie_rp5 on
++			register "PcieRpSlotImplemented[4]" = "true"
++			smbios_slot_desc "SlotTypePciExpressGen3X1" "SlotLengthShort"
++				"PCIEX1_2" "SlotDataBusWidth1X"
++		end
++		device ref pcie_rp6 on end	# ASMedia ASM1083 PCIe to PCI bridge
++		device ref pcie_rp7 on end
++		device ref pcie_rp8 on end
++		device ref pcie_rp9 on end
++		device ref pcie_rp10 on end
++		device ref pcie_rp11 on end
++		device ref pcie_rp12 on end
++		device ref pcie_rp13 on end
++		device ref pcie_rp14 on end
++		device ref pcie_rp15 on end
++		device ref pcie_rp16 on end
++		device ref pcie_rp17 on end
++		device ref pcie_rp18 on end
++		device ref pcie_rp19 on end
++		device ref pcie_rp20 on end
++		device ref pcie_rp21 on end
++		device ref pcie_rp22 on end
++		device ref pcie_rp23 on end
++		device ref pcie_rp24 on end
++
++		device ref lpc_espi on
++			# Super I/O hardware monitor (vendor DSDT: IOHW 0x290, IOHL 0x10)
++			register "gen1_dec" = "LPC_IO(0x290, 0x10)"
++
++			chip superio/common
++				device pnp 2e.0 on	# passes SIO base addr to SSDT gen
++					chip superio/nuvoton/nct6793d
++						device pnp 2e.1 on	# Parallel port (LPT header)
++							io  0x60 = 0x378
++							irq 0x70 = 7
++							drq 0x74 = 4	# no DMA
++						end
++						device pnp 2e.2 on	# UART A (COM1 header)
++							io  0x60 = 0x3f8
++							irq 0x70 = 4
++						end
++						device pnp 2e.3 on	# UART B (COM2 header)
++							io  0x60 = 0x2f8
++							irq 0x70 = 3
++						end
++						device pnp 2e.5 on	# PS/2 keyboard and mouse
++							io  0x60 = 0x60
++							io  0x62 = 0x64
++							irq 0x70 = 1
++							irq 0x72 = 12
++						end
++						# Hardware monitor: base address only, the fan
++						# control registers keep their power-on defaults.
++						device pnp 2e.b on
++							io  0x60 = 0x290
++							io  0x62 = 0
++							irq 0x70 = 0
++						end
++					end
++				end
++			end
++		end
++		device ref hda on
++			register "PchHdaAudioLinkHda" = "1"
++		end
++		device ref smbus on end
++		device ref fast_spi on end
++		device ref gbe on end
++	end
++end
+diff --git a/src/mainboard/asus/b360m-c/dsdt.asl b/src/mainboard/asus/b360m-c/dsdt.asl
+new file mode 100644
+index 00000000..61dd70f4
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/dsdt.asl
+@@ -0,0 +1,27 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <acpi/acpi.h>
++DefinitionBlock(
++	"dsdt.aml",
++	"DSDT",
++	ACPI_DSDT_REV_2,
++	OEM_ID,
++	ACPI_TABLE_CREATOR,
++	COREBOOT_OEM_REVISION
++)
++{
++	#include <acpi/dsdt_top.asl>
++	#include <soc/intel/common/block/acpi/acpi/platform.asl>
++	#include <soc/intel/common/block/acpi/acpi/globalnvs.asl>
++	#include <cpu/intel/common/acpi/cpu.asl>
++
++	Scope (\_SB) {
++		Device (PCI0)
++		{
++			#include <soc/intel/common/block/acpi/acpi/northbridge.asl>
++			#include <soc/intel/cannonlake/acpi/southbridge.asl>
++		}
++	}
++
++	#include <southbridge/intel/common/acpi/sleepstates.asl>
++}
+diff --git a/src/mainboard/asus/b360m-c/gma-mainboard.ads b/src/mainboard/asus/b360m-c/gma-mainboard.ads
+new file mode 100644
+index 00000000..b4f13636
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/gma-mainboard.ads
+@@ -0,0 +1,23 @@
++-- SPDX-License-Identifier: GPL-2.0-or-later
++
++with HW.GFX.GMA;
++with HW.GFX.GMA.Display_Probing;
++
++use HW.GFX.GMA;
++use HW.GFX.GMA.Display_Probing;
++
++private package GMA.Mainboard is
++
++   -- Port mapping from the vendor VBT:
++   --   DDI B: DP1 (DP++), DDI C: DP2 (DP++), DDI D: HDMI,
++   --   DDI E: DP to VGA converter (D-Sub port)
++   ports : constant Port_List :=
++     (HDMI3,
++      DP1,
++      DP2,
++      HDMI1,
++      HDMI2,
++      Analog,
++      others => Disabled);
++
++end GMA.Mainboard;
+diff --git a/src/mainboard/asus/b360m-c/gpio.c b/src/mainboard/asus/b360m-c/gpio.c
+new file mode 100644
+index 00000000..934a2727
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/gpio.c
+@@ -0,0 +1,321 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <gpio.h>
++#include "include/gpio.h"
++
++/*
++ * Pad configuration taken from the GPIO_INIT_CONFIG table of the vendor
++ * firmware (ASUS BIOS 3202, board PEIM 2accd044-284c-432f-9a1a-4cde31036c9f)
++ * and converted with `util/intelp2m -p cnl-h`. Every Cannon Point PCH-H pad
++ * is listed in the vendor table, so every pad is listed here.
++ */
++static const struct pad_config gpio_table[] = {
++	/* GPP_A */
++	/* GPP_A0 - RCIN# */
++	_PAD_CFG_STRUCT(GPP_A0, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_A1 - LAD0 */
++	PAD_CFG_NF(GPP_A1, UP_20K, PLTRST, NF1),
++	/* GPP_A2 - LAD1 */
++	PAD_CFG_NF(GPP_A2, UP_20K, PLTRST, NF1),
++	/* GPP_A3 - LAD2 */
++	PAD_CFG_NF(GPP_A3, UP_20K, PLTRST, NF1),
++	/* GPP_A4 - LAD3 */
++	PAD_CFG_NF(GPP_A4, UP_20K, PLTRST, NF1),
++	/* GPP_A5 - LFRAME# */
++	_PAD_CFG_STRUCT(GPP_A5, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE), 0),
++	/* GPP_A6 - SERIRQ */
++	PAD_CFG_NF(GPP_A6, NONE, PLTRST, NF1),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A7, NONE, PLTRST, OFF, DRIVER),
++	/* GPP_A8 - CLKRUN# */
++	_PAD_CFG_STRUCT(GPP_A8, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_A9 - CLKOUT_LPC0 */
++	_PAD_CFG_STRUCT(GPP_A9,
++		PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE),
++		PAD_PULL(DN_20K)),
++	/* GPP_A10 - CLKOUT_LPC1 */
++	_PAD_CFG_STRUCT(GPP_A10,
++		PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE),
++		PAD_PULL(DN_20K)),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A11, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A12, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A13, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A14, NONE, DEEP, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A15, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A16, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A17, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A18, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A19, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A20, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A21, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A22, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_A23, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPP_B */
++	PAD_CFG_GPI_TRIG_OWN(GPP_B0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B1, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B2, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B3, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B4, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B5, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B7, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B8, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B9, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B10, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B11, NONE, PLTRST, OFF, DRIVER),
++	/* GPP_B12 - SLP_S0# */
++	_PAD_CFG_STRUCT(GPP_B12, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE), 0),
++	/* GPP_B13 - PLTRST# */
++	_PAD_CFG_STRUCT(GPP_B13, PAD_FUNC(NF1) | PAD_RESET(DEEP) | PAD_BUF(RX_DISABLE), 0),
++	/* GPP_B14 - SPKR */
++	_PAD_CFG_STRUCT(GPP_B14,
++		PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE),
++		PAD_PULL(DN_20K)),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B15, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B16, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B17, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B18, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B19, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B20, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B21, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B22, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_B23, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPP_C */
++	/* GPP_C0 - SMBCLK */
++	PAD_CFG_NF(GPP_C0, NONE, DEEP, NF1),
++	/* GPP_C1 - SMBDATA */
++	PAD_CFG_NF(GPP_C1, NONE, DEEP, NF1),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C2, NONE, PLTRST, OFF, DRIVER),
++	/* GPP_C3 - SML0CLK */
++	PAD_CFG_NF(GPP_C3, NONE, DEEP, NF1),
++	/* GPP_C4 - SML0DATA */
++	PAD_CFG_NF(GPP_C4, NONE, DEEP, NF1),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C5, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C6, NONE, DEEP, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C7, NONE, DEEP, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C8, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C9, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C10, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C11, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C12, NONE, RSMRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C13, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C14, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C15, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C16, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C17, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C18, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C19, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C20, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C21, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C22, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_C23, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPP_D */
++	PAD_CFG_GPI_TRIG_OWN(GPP_D0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D1, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D2, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D3, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D4, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D5, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D7, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D8, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D9, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D10, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D11, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D12, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D13, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D14, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D15, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D16, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D17, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D18, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D19, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D20, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D21, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_D22, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_SCI(GPP_D23, NONE, DEEP, LEVEL, INVERT),
++
++	/* GPP_E */
++	PAD_CFG_GPI_TRIG_OWN(GPP_E0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_E1, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_E2, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_E3, NONE, PLTRST, OFF, DRIVER),
++	/* GPP_E4 - SATA_DEVSLP0 */
++	_PAD_CFG_STRUCT(GPP_E4, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE), 0),
++	/* GPP_E5 - SATA_DEVSLP1 */
++	_PAD_CFG_STRUCT(GPP_E5, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE), 0),
++	PAD_CFG_GPI_TRIG_OWN(GPP_E6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_E7, NONE, PLTRST, OFF, DRIVER),
++	/* GPP_E8 - SATALED# */
++	_PAD_CFG_STRUCT(GPP_E8, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE), 0),
++	/* GPP_E9 - USB2_OC0# */
++	_PAD_CFG_STRUCT(GPP_E9, PAD_FUNC(NF1) | PAD_RESET(DEEP) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_E10 - USB2_OC1# */
++	_PAD_CFG_STRUCT(GPP_E10, PAD_FUNC(NF1) | PAD_RESET(DEEP) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_E11 - USB2_OC2# */
++	_PAD_CFG_STRUCT(GPP_E11, PAD_FUNC(NF1) | PAD_RESET(DEEP) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_E12 - USB2_OC3# */
++	_PAD_CFG_STRUCT(GPP_E12, PAD_FUNC(NF1) | PAD_RESET(DEEP) | PAD_BUF(TX_DISABLE), 0),
++
++	/* GPP_F */
++	PAD_CFG_GPI_TRIG_OWN(GPP_F0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F1, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F2, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F3, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F4, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F5, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F7, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F8, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F9, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F10, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F11, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F12, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F13, NONE, PLTRST, OFF, DRIVER),
++	/* GPP_F14 - PS_ON# */
++	_PAD_CFG_STRUCT(GPP_F14, PAD_FUNC(NF2) | PAD_RESET(PLTRST) | PAD_BUF(RX_DISABLE), 0),
++	/* GPP_F15 - USB2_OC4# */
++	_PAD_CFG_STRUCT(GPP_F15, PAD_FUNC(NF1) | PAD_RESET(DEEP) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_F16 - USB2_OC5# */
++	_PAD_CFG_STRUCT(GPP_F16, PAD_FUNC(NF1) | PAD_RESET(DEEP) | PAD_BUF(TX_DISABLE), 0),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F17, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F18, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F19, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F20, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F21, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F22, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_F23, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPP_G */
++	PAD_CFG_GPI_TRIG_OWN(GPP_G0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_G1, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_G2, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_G3, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_G4, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_G5, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_G6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_G7, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPP_H */
++	PAD_CFG_GPI_TRIG_OWN(GPP_H0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H1, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H2, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H3, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H4, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H5, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H7, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H8, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H9, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H10, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H11, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H12, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H13, NONE, RSMRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H14, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H15, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H16, NONE, RSMRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H17, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H18, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H19, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H20, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H21, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H22, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_H23, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPP_I */
++	/* GPP_I0 - DDPB_HPD0 */
++	_PAD_CFG_STRUCT(GPP_I0, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_I1 - DDPB_HPD1 */
++	_PAD_CFG_STRUCT(GPP_I1, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_I2 - DDPB_HPD2 */
++	_PAD_CFG_STRUCT(GPP_I2, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(TX_DISABLE), 0),
++	/* GPP_I3 - DDPB_HPD3 */
++	_PAD_CFG_STRUCT(GPP_I3, PAD_FUNC(NF1) | PAD_RESET(PLTRST) | PAD_BUF(TX_DISABLE), 0),
++	PAD_CFG_GPI_TRIG_OWN(GPP_I4, NONE, PLTRST, OFF, DRIVER),
++	/* GPP_I5 - DDPB_CTRLCLK */
++	PAD_CFG_NF(GPP_I5, NONE, PLTRST, NF1),
++	/* GPP_I6 - DDPB_CTRLDATA */
++	PAD_CFG_NF(GPP_I6, DN_20K, PLTRST, NF1),
++	/* GPP_I7 - DDPC_CTRLCLK */
++	PAD_CFG_NF(GPP_I7, NONE, PLTRST, NF1),
++	/* GPP_I8 - DDPC_CTRLDATA */
++	PAD_CFG_NF(GPP_I8, DN_20K, PLTRST, NF1),
++	/* GPP_I9 - DDPD_CTRLCLK */
++	PAD_CFG_NF(GPP_I9, NONE, PLTRST, NF1),
++	/* GPP_I10 - DDPD_CTRLDATA */
++	PAD_CFG_NF(GPP_I10, DN_20K, PLTRST, NF1),
++	PAD_CFG_GPI_TRIG_OWN(GPP_I11, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_I12, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_I13, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_I14, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPP_J */
++	PAD_CFG_GPI_TRIG_OWN(GPP_J0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J1, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J2, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J3, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J4, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J5, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J7, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J8, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J9, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J10, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_J11, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPP_K */
++	PAD_CFG_GPI_TRIG_OWN(GPP_K0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K1, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K2, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K3, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K4, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K5, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K7, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K8, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K9, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K10, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K11, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K12, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K13, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K14, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K15, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K16, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K17, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K18, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K19, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K20, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K21, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K22, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPP_K23, NONE, PLTRST, OFF, DRIVER),
++
++	/* GPD */
++	PAD_CFG_GPI_TRIG_OWN(GPD0, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPD1, NONE, PLTRST, OFF, DRIVER),
++	/* GPD2 - LAN_WAKE# */
++	_PAD_CFG_STRUCT(GPD2,
++		PAD_FUNC(NF1) | PAD_RESET(RSMRST) | PAD_IRQ_ROUTE(SCI) | PAD_BUF(TX_DISABLE),
++		0),
++	/* GPD3 - PRWBTN# */
++	_PAD_CFG_STRUCT(GPD3,
++		PAD_FUNC(NF1) | PAD_RESET(RSMRST) | PAD_BUF(TX_DISABLE),
++		PAD_PULL(UP_20K)),
++	/* GPD4 - SLP_S3# */
++	_PAD_CFG_STRUCT(GPD4, PAD_FUNC(NF1) | PAD_RESET(RSMRST) | PAD_BUF(RX_DISABLE), 0),
++	/* GPD5 - SLP_S4# */
++	_PAD_CFG_STRUCT(GPD5, PAD_FUNC(NF1) | PAD_RESET(RSMRST) | PAD_BUF(RX_DISABLE), 0),
++	PAD_CFG_GPI_TRIG_OWN(GPD6, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPD7, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPD8, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPD9, NONE, PLTRST, OFF, DRIVER),
++	PAD_CFG_GPI_TRIG_OWN(GPD10, NONE, PLTRST, OFF, DRIVER),
++	/* GPD11 - LANPHYPC */
++	_PAD_CFG_STRUCT(GPD11, PAD_FUNC(NF1) | PAD_RESET(RSMRST) | PAD_BUF(RX_DISABLE), 0),
++};
++
++void mainboard_configure_gpios(void)
++{
++	gpio_configure_pads(gpio_table, ARRAY_SIZE(gpio_table));
++}
+diff --git a/src/mainboard/asus/b360m-c/hda_verb.c b/src/mainboard/asus/b360m-c/hda_verb.c
+new file mode 100644
+index 00000000..2ea6ef61
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/hda_verb.c
+@@ -0,0 +1,47 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <device/azalia_device.h>
++
++/*
++ * Realtek ALC887 verb table, taken verbatim from the HD Audio verb table
++ * of the vendor firmware (BIOS 3202). The vendor firmware has no verb
++ * table for the Intel display audio codec, so none is provided here.
++ */
++static const u32 realtek_alc887_verbs[] = {
++	AZALIA_SUBVENDOR(0, 0x104386ca),
++	AZALIA_RESET(1),
++	AZALIA_PIN_CFG(0, 0x11, 0x40330000),	/* not a jack (vendor value) */
++	AZALIA_PIN_CFG(0, 0x12, AZALIA_PIN_CFG_NC(0)),
++	AZALIA_PIN_CFG(0, 0x14, 0x01014010),	/* rear line out, green */
++	AZALIA_PIN_CFG(0, 0x15, 0x01813040),	/* rear line in, blue */
++	AZALIA_PIN_CFG(0, 0x16, AZALIA_PIN_CFG_NC(0)),
++	AZALIA_PIN_CFG(0, 0x17, AZALIA_PIN_CFG_NC(0)),
++	AZALIA_PIN_CFG(0, 0x18, 0x01a1904f),	/* rear mic in, pink */
++	AZALIA_PIN_CFG(0, 0x19, 0x02a19050),	/* front panel mic in, pink */
++	AZALIA_PIN_CFG(0, 0x1a, 0x99130120),	/* MONO_OUT header (speaker amp) */
++	AZALIA_PIN_CFG(0, 0x1b, 0x02214030),	/* front panel headphone, green */
++	AZALIA_PIN_CFG(0, 0x1c, AZALIA_PIN_CFG_NC(0)),
++	AZALIA_PIN_CFG(0, 0x1d, 0x40200001),	/* not a jack (vendor value) */
++	AZALIA_PIN_CFG(0, 0x1e, AZALIA_PIN_CFG_NC(0)),
++	AZALIA_PIN_CFG(0, 0x1f, AZALIA_PIN_CFG_NC(0)),
++	/* Vendor processing coefficient 0x07 = 0x09c8, written twice by vendor firmware */
++	AZALIA_VERB_4B(0, 0x20, AZALIA_SET_COEFF_INDEX, 0x0007),
++	AZALIA_VERB_4B(0, 0x20, AZALIA_SET_PROCESSING_COEFF, 0x09c8),
++	AZALIA_VERB_4B(0, 0x20, AZALIA_SET_COEFF_INDEX, 0x0007),
++	AZALIA_VERB_4B(0, 0x20, AZALIA_SET_PROCESSING_COEFF, 0x09c8),
++};
++
++const u32 pc_beep_verbs[] = {};
++
++struct azalia_codec mainboard_azalia_codecs[] = {
++	{
++		.name         = "Realtek ALC887",
++		.vendor_id    = 0x10ec0887,
++		.subsystem_id = 0x104386ca,
++		.address      = 0,
++		.verbs        = realtek_alc887_verbs,
++		.verb_count   = ARRAY_SIZE(realtek_alc887_verbs),
++	},
++};
++
++AZALIA_ARRAY_SIZES;
+diff --git a/src/mainboard/asus/b360m-c/include/gpio.h b/src/mainboard/asus/b360m-c/include/gpio.h
+new file mode 100644
+index 00000000..ef2a21c4
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/include/gpio.h
+@@ -0,0 +1,8 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#ifndef MAINBOARD_GPIO_H
++#define MAINBOARD_GPIO_H
++
++void mainboard_configure_gpios(void);
++
++#endif
+diff --git a/src/mainboard/asus/b360m-c/romstage.c b/src/mainboard/asus/b360m-c/romstage.c
+new file mode 100644
+index 00000000..531379b8
+--- /dev/null
++++ b/src/mainboard/asus/b360m-c/romstage.c
+@@ -0,0 +1,30 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <soc/cnl_memcfg_init.h>
++#include <soc/romstage.h>
++
++static const struct cnl_mb_cfg baseboard_mem_cfg = {
++	/*
++	 * Four DDR4 UDIMM slots, two per channel. SPD addresses as in the
++	 * FSP-M UPD defaults that the vendor firmware also uses:
++	 * channel A DIMM0/DIMM1, channel B DIMM0/DIMM1.
++	 */
++	.spd[0] = {.read_type = READ_SMBUS, .spd_spec = {.spd_smbus_address = 0xa0}},
++	.spd[1] = {.read_type = READ_SMBUS, .spd_spec = {.spd_smbus_address = 0xa2}},
++	.spd[2] = {.read_type = READ_SMBUS, .spd_spec = {.spd_smbus_address = 0xa4}},
++	.spd[3] = {.read_type = READ_SMBUS, .spd_spec = {.spd_smbus_address = 0xa6}},
++
++	/* Coffee Lake-S desktop DDR4 values, as used by asrock/h370m-itx_ac */
++	.rcomp_resistor = {121, 75, 100},
++	.rcomp_targets = {60, 26, 20, 20, 26},
++	.dq_pins_interleaved = 1,
++	.vref_ca_config = 2,
++	.ect = 0,
++};
++
++void mainboard_memory_init_params(FSPM_UPD *memupd)
++{
++	memupd->FspmConfig.UserBd = BOARD_TYPE_DESKTOP;
++
++	cannonlake_memcfg_init(&memupd->FspmConfig, &baseboard_mem_cfg);
++}
+-- 
+2.43.0
+

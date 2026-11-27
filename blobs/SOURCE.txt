@@ -1,0 +1,4 @@
+source: PRIME-B360M-C-ASUS-3202.CAP (capsule)
+source sha256: 8e382eb2823f69526b9cbc0eac165e92e88222ad582c3131a596faa9f2a64a85
+gbe mac: bank0=88:88:88:88:87:88
+extracted: 2026-11-27T02:36:34Z

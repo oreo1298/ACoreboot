@@ -1,0 +1,287 @@
+# DECISIONS — ASUS PRIME B360M-C coreboot port
+
+Every assumption, and every value that does not come straight from your hardware,
+is listed here with its source, a confidence level and how to check it on the board.
+
+Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
+**M** medium (one indirect source, or reference-board convention),
+**L** low (best guess, chosen to be the safe option).
+
+"Vendor image" always means `board-data/vendor/PRIME-B360M-C-ASUS-3202.CAP`
+(BIOS 3202, 2021-07-10). It is the only input that was provided.
+
+## D-000 Input gap: no hardware dumps at all — H
+
+- **Situation:** `board-data/` held no `notes.md`, no `dumps/` and no external-programmer
+  dump. The only upload was the ASUS update capsule (`.CAP` plus `BIOSRenamer.exe`, which
+  I deleted).
+- **What I did:** derived everything I could from the vendor image instead
+  (descriptor, ME, GbE, VBT, GPIO table, HDA verbs, Super I/O init, SMBIOS slot and port
+  tables, DSDT). Everything else comes from reference boards or is set to a safe default,
+  and the entries below say which.
+- **Verify:** bring the dumps listed in BRINGUP.md §7, especially
+  `inteltool -G`, `lspci -nnvvv -t`, `superiotool -deV` and the external SPI dump.
+
+## D-001 Capsule = full SPI image — H
+
+- **Finding:** the `.CAP` is a 0x800-byte AMI capsule header followed by a complete
+  16 MiB image. The flash descriptor signature sits at 0x810.
+- **Use:** `scripts/extract_blobs.sh` strips the header and extracts the regions to
+  `blobs/`.
+- **Source priority:** if you drop your own 16 MiB programmer dump (`*.bin` or `*.rom`)
+  into `board-data/vendor/`, it is used instead of the capsule.
+
+## D-002 GbE region from the capsule is a template — H
+
+- **Finding:** the capsule's GbE region has the ASUS placeholder MAC `88:88:88:88:87:88`.
+  The NVM checksum word (0x3F) is `0xFFFF`; with the "checksum valid" bit (word 0x03
+  bit 0) clear, Linux e1000e recomputes the checksum on first probe.
+- **Consequence:** flashing a full image built from the capsule replaces your board's
+  real MAC with the placeholder. LAN should still work, but every board built this way
+  gets the same MAC.
+- **Mitigation:**
+  1. Flash the BIOS region only (keeps your IFD, ME and GbE). This is the default
+     procedure in BRINGUP.md.
+  2. Or put your SPI dump into `board-data/vendor/`.
+  3. Or build with `MAC=<sticker MAC> scripts/build.sh`; `scripts/gbe_mac.py` sets the
+     MAC and fixes the checksum.
+
+## D-003 Flash descriptor left byte-identical — H
+
+- **Finding:** coreboot's default `UNLOCK_FLASH_REGIONS` rewrote FLMSTR1-5 to
+  `0xffffffff`.
+- **Decision:** set `CONFIG_DO_NOT_TOUCH_DESCRIPTOR_REGION=y`. `scripts/build.sh`
+  checks that the descriptor in every ROM is byte-identical to `blobs/descriptor.bin`.
+- **Exception:** variant D, where exactly one byte (the HAP strap) may differ, and the
+  build checks that too.
+- **Consequence:** host write access stays as the vendor set it (IFD and ME read-only,
+  BIOS and GbE writable). Internal flashing works only for the BIOS region; a full image
+  needs the external programmer.
+
+## D-004 ME firmware — H
+
+- **Finding:** CSME 12.0.64.1551 (consumer), taken unmodified from the capsule.
+- **Difference from your board:** your board's ME region also holds runtime state in MFS.
+  The capsule's copy is factory-fresh, so a full-image flash resets ME state (harmless
+  for coreboot).
+- **Variant D:** `me_cleaner -S` sets only the HAP bit and does not touch the ME
+  partitions.
+
+## D-005 Boot Guard — H (for "not provisioned in firmware")
+
+- **Finding:** the FIT has 1 header plus 4 microcode entries. There is no Startup ACM
+  (type 2), no Key Manifest (0x0B) and no Boot Policy Manifest (0x0C).
+- **Reasoning:** a board with Boot Guard fused on cannot boot without an ACM, KM and BPM.
+  The vendor firmware boots, so verified/measured Boot Guard is not active.
+- **Not checked:** the fuse state (`intelmetool -b`). Please bring it.
+
+## D-006 GPIO table source — M-H
+
+- **Source:** board PEIM `2accd044-284c-432f-9a1a-4cde31036c9f` (4 KiB, ASUS) holds a
+  228-entry `GPIO_INIT_CONFIG[]` in Intel Coffee Lake RC format that covers every CNP-H
+  pad exactly once. The identical table appears at flash 0xF6258C and 0xFE258C (main and
+  backup PEI FV).
+  - The PEIM depends only on the PCD PPI, so it runs early in PEI (pre-memory).
+  - A second module, `3eaf5e3a…`, holds Intel CRB tables (scattered pads, several
+    boards). These are not used.
+- **Conversion:** `scripts/vendor_gpio.py` turns each entry into DW0/DW1/HOSTSW_OWN the
+  way RC `GpioConfigurePad()` does, and writes a mask of the bits the table really
+  determines.
+  - Inputs: pad encoding and enum values from Intel's `GpioPinsCnlH.h` and
+    `GpioConfig.h` (Slim Bootloader copies).
+  - Output: a synthetic inteltool-format dump, `board-data/dumps/inteltool-G-synthetic.txt`.
+  - That dump goes through util/intelp2m with the new `cnl-h` platform, then
+    `scripts/gen_gpio_c.py` (restores DRIVER ownership).
+- **Unknowns:**
+  - Fields the vendor leaves at "default" keep their hardware reset value, which I don't
+    know without a dump. In practice that is RXEVCFG for GPIO inputs (assumed `OFF`,
+    affects only interrupt edge detection; routing is disabled).
+  - RC/FSP reconfigures some pads after this table (e.g. CLKREQ#, see D-012). Those
+    changes are not in the vendor table.
+- **Verify:** `inteltool -G` under vendor firmware, then
+  `scripts/gpio_check.py --dump <file>`.
+
+## D-007 GPIO programming time — M
+
+- **Decision:** the whole table is applied in `bootblock_mainboard_init()`, right after
+  the COM1 console is up.
+- **Why:** the vendor PEIM is pre-memory, and every SMBus/LPC pad in the table keeps its
+  native function, so console and SPD reads are unaffected.
+
+## D-008 intelp2m `cnl` is wrong for PCH-H — H
+
+- **Finding:** the `cnl` platform models CNL-LP. Its PADRSTCFG remap gives wrong reset
+  sources for GPP_A, GPP_B, GPP_G and GPD on PCH-H.
+- **Decision:** add `-p cnl-h` (patch 0001). The correct maps come from
+  `soc/intel/cannonlake/gpio_cnp_h.c`.
+
+## D-009 Super I/O = Nuvoton NCT6793D @ 0x2E — H
+
+- **Identification:**
+  - SMBIOS type 34 says "Nuvoton NCT6793D".
+  - DSDT `SIO1`: `SP1O=0x2E`, entry key 0x87, exit key 0xAA, HWM `IO3B/IOHW=0x290`
+    length 0x10.
+  - DSDT `DCAT`: LDN map UART A=2, UART B=3, LPT=1, KBC=5, CIR=6.
+- **Driver:** new `superio/nuvoton/nct6793d` (patch 0002), modeled on nct6796d.
+  - LDN 0x12 is included because the vendor writes its CR EB.
+  - LDNs 0x11 and 0x15 (NCT6796D-only, as far as I know) are left out — M.
+
+## D-010 Super I/O early init copied from vendor PEI — H
+
+- **Source:** vendor PEIM `9029f23e…` table (AMI `{port, and, or}` triplets), decoded:
+  - CR27: clear bit 2, set bit 4
+  - CR2A: clear bit 6 and bits 1:0
+  - CR2F: clear bit 1
+  - LDN12 CRE B: clear bits 5:4
+  - KBC 0x60/0x64, IRQ1
+  - UART A 0x3F8
+- **Also:** the AMI status-code modules clear CR2A bit 7 (UART A pin routing), which is
+  exactly what `SUPERIO_NUVOTON_COMMON_COM_A` does.
+- **Decision:** the bootblock replays these writes. No other global CRs are touched.
+- **Unknown:** what each pin-mux bit means without the datasheet. Keeping the vendor
+  values is the safe choice.
+
+## D-011 Hardware monitor / fans — H (safety rule)
+
+- **Finding:** no vendor fan register values could be extracted (the SIO DXE driver has
+  no recognisable table).
+- **Decision:** the HWM LDN only gets its base address (0x290, as in the vendor DSDT).
+  No SmartFan / PECI programming happens, so fans run with Nuvoton power-on defaults
+  (normally full speed). Expect it to be loud.
+- **Verify:** fans spin at boot; `sensors` under Linux.
+
+## D-012 PCIe clocks: all free-running, no CLKREQ — L (safe default)
+
+- **Problem:** the CLKSRC → root port / GbE mapping is set at runtime by AMI code and is
+  not in any table I could find. The vendor GPIO table leaves `SRCCLKREQ#` pads
+  (GPP_B5-B10, GPP_H0-H9) as GPIO inputs; RC switches the used ones to native later.
+- **Decision:** `PcieClkSrcUsage[0..15] = PCIE_CLK_FREE`,
+  `PcieClkSrcClkReq[*] = PCIE_CLK_NOTUSED`. Every reference clock runs all the time.
+- **Effect:** every device gets a clock whatever the routing. The cost is no
+  CLKREQ-based power management (no L1 substates) and slightly more power and EMI.
+- **Verify:** `inteltool -G` under vendor firmware (CLKREQ pads that are native = used),
+  plus `lspci -vv` LnkCtl/L1SS.
+
+## D-013 Root ports: all 24 enabled — M
+
+- **Known:** vendor SMBIOS type 9 gives PCIEX16=00:01.0, PCIEX1_1=00:1c.3 (RP4),
+  PCIEX1_2=00:1c.4 (RP5), PCI slot=00:1c.5 (RP6, ASM1083 bridge).
+- **Unknown:** the M.2_1/M.2_2 root ports and the GbE lane.
+- **Decision:** all RP1-24 are enabled. The soft straps decide lane ownership, and FSP
+  disables ports without lanes or links (the AMI default also enables all RPs). Slot
+  descriptors are set for RP4, RP5 and PEG.
+- **Verify:** `lspci -tv` under vendor firmware.
+
+## D-014 USB port map — M; over-current mapping — L
+
+- **Port names:** from vendor SMBIOS type 8 and the manual: U31G2_12/U31G2_34 (rear Gen2),
+  U31G1_56 (header), USB78 (header), LAN_USB910 (rear), USB1112 (header). I assumed they
+  map 1:1 to PCH USB2 ports 1-12 and USB3 ports 1-6, which is ASUS's naming practice and
+  matches the B360 maximum of 12 USB2 / 6 USB3.
+- **OC pins:** OC0-OC5 are native in the GPIO table, but the port → OC mapping is unknown,
+  so all ports use `OC_SKIP`. The ports still get power; the board's power switches
+  limit current in hardware, but the OS won't see OC events.
+- **Tuning:** `USB2_PORT_MID` / `USB3_PORT_DEFAULT` (FSP defaults, no RVP tuning).
+- **Verify:** plug a device into each port and compare with `lsusb -t`.
+
+## D-015 SATA — H/M
+
+- **Finding:** 6 ports (SATA6G_1-6 = ports 0-5) per the manual and SMBIOS. M.2_1 in SATA
+  mode shares SATA6G_2 (manual).
+- **Decision:** all 6 ports enabled. No hot-plug, no DevSleep (DEVSLP0/1 pads are native
+  per the vendor table, but DevSleep stays off as the safe default).
+
+## D-016 Memory: SPD 0xA0/0xA2/0xA4/0xA6 — M
+
+- **Finding:** four DDR4 UDIMM slots (DIMM_A1/A2/B1/B2, 2DPC). The vendor FSP-M wrapper
+  and the FSP-M UPD defaults both contain `{0xA0,0xA2,0xA4,0xA6}`, and no ASUS override
+  was found.
+- **Decision:** spd[0..3] = Ch A DIMM0, Ch A DIMM1, Ch B DIMM0, Ch B DIMM1.
+- **Rcomp / DQ / CA:** `rcomp_resistor {121,75,100}`, `rcomp_targets {60,26,20,20,26}`,
+  `dq_pins_interleaved=1`, `vref_ca_config=2`. These are the CFL-S desktop values used
+  by asrock/h370m-itx_ac — M.
+- **Verify:** see BRINGUP.md §5 (one DIMM in each slot alone; `decode-dimms` addresses
+  under vendor firmware).
+
+## D-017 Display: VBT and DDI mapping — H
+
+- **VBT:** IntelGopVbt FFS file `56752da9…` (`$VBT SKYLAKE`, BDB 221, 4449 bytes),
+  copied unmodified as `data.vbt`. The legacy VBIOS option ROM's own VBT (BDB 209) has the
+  same child devices.
+- **DDI mapping:**
+  - DDI B = DP1 (DP++, AUX B)
+  - DDI C = DP2 (DP++, AUX C)
+  - DDI D = HDMI
+  - DDI E = DP-only on AUX A, i.e. the DP-to-VGA converter feeding the D-Sub port
+- **Note:** the manual (rev 3) lists 2×DP + HDMI + D-Sub on the rear panel.
+
+## D-018 libgfxinit and VGA — M
+
+- **Port list:** HDMI3, DP1, DP2, HDMI1, HDMI2, Analog.
+- **VGA caveat:** libgfxinit maps `Analog` to DDI E on Skylake-family GPUs, but
+  asrock/h110m documents that VGA does not work that way. So VGA output is expected
+  **only** with FSP GOP (variant B/C).
+
+## D-019 HDA verbs — H
+
+- **Source:** vendor HDA verb PEIM `60c33d7a…`, copied verbatim:
+  - subsystem 1043:86ca
+  - AFG reset ×4
+  - pin configs for NID 0x11-0x1f
+  - coefficient 0x07=0x09c8 on NID 0x20 (written twice, as the vendor does)
+- **Not used:** the alternative pin sets in the same module (other front-panel modes).
+- **iDisp codec:** the vendor has no verb table for it, so coreboot has none either.
+
+## D-020 ACPI — M
+
+- **Decision:** a standard CNL DSDT, plus the Super I/O SSDT generated by the
+  `superio/common` generator (COM1, COM2, LPT, PS/2).
+- **From the vendor DSDT:** nothing board-specific besides the SIO data. Its GPE
+  handlers are generic Intel RC. GPE0 group routing (GPP_C/K/E) is taken from H370M.
+  - GPP_D23 (SCI-routed in the vendor table) is therefore delivered through tier-2 and
+    has no handler. It is an input, so this is harmless.
+
+## D-021 CPU power / VR — H
+
+- **Decision:** no overrides.
+  - PL1 = TDP, PL2 = 1.25×TDP (Intel default, coreboot common code).
+  - IccMax comes from the CFL-S datasheet table in `soc/intel/cannonlake/vr_config.c`.
+  - TCC offset 0; PROCHOT/THERMTRIP untouched (FSP defaults).
+- No overclocking, no undervolting.
+
+## D-022 SLP_Sx assertion widths, power-fail state — H
+
+- **Decision:** not set, so FSP defaults apply. After power loss the board stays off
+  (coreboot default).
+
+## D-023 TPM — not implemented
+
+- The LPC TPM header is not enabled in this first image (priority 11).
+
+## D-024 Toolchain — H
+
+- **Used:** coreboot crossgcc at commit c49935a4 (GCC 15.2.0, binutils 2.46.1, NASM 3.02,
+  IASL 20251212).
+- **How:** `make crossgcc-i386 CPUS=4 BUILDGCC_OPTIONS=-m` (the `-m` flag uses the
+  coreboot tarball mirror because github.com is blocked here), plus `make iasl`. Host:
+  Ubuntu 24.04 gcc/gnat 13.3.
+- The Docker SDK fallback was not needed.
+
+## D-025 EDK2 (variant C) — H
+
+- **Finding:** coreboot's EDK2 payload clones edk2 and its submodules (openssl, brotli,
+  libfdt, mipisyst, …) from GitHub, and github.com is unreachable from this VM.
+  review.coreboot.org mirrors edk2 itself but none of its submodules.
+- **Decision:** `scripts/build.sh` builds C automatically wherever GitHub is reachable;
+  here it writes `out/*_C_*.SKIPPED.txt`.
+
+## D-026 coreboot pin — H
+
+- **Pin:** `main` @ c49935a44f99585488dec654bd4f3eefe262160c (2026-11-26).
+- **Patches:** the series in `patches/` applies on top of it.
+
+## D-027 Signed-off-by — H
+
+- The patches carry no `Signed-off-by:`. The DCO is a statement only you can make.
+  `git commit --amend -s` each patch before you send it to Gerrit.
+- checkpatch runs with `--no-signoff` for that reason.
