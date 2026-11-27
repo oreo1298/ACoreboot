@@ -238,6 +238,22 @@ Thermal sanity check: stress all cores (`stress-ng --cpu 0`) for 10 minutes.
 
 ## 7. What to capture and bring back
 
+`cbmem` and `inteltool` are coreboot utilities, not distro packages. Arch has
+them only in the AUR. Build them from the checkout that `setup.sh` created:
+
+```bash
+make -C coreboot/util/cbmem
+```
+```bash
+make -C coreboot/util/inteltool
+```
+
+- Run them as `sudo coreboot/util/cbmem/cbmem …` and
+  `sudo coreboot/util/inteltool/inteltool …`.
+- If inteltool fails with an mmap or permission error, the kernel is blocking
+  `/dev/mem`. Boot once with `iomem=relaxed` on the kernel command line.
+- `lsusb` is in the `usbutils` package.
+
 Put everything into `board-data/dumps/` (create subfolders `vendor/` and `coreboot/`).
 
 | Capture | vendor | coreboot | Command |
