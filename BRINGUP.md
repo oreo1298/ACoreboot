@@ -327,8 +327,26 @@ scripts/build.sh
 ## 9. Disabling the ME (`me_state`)
 
 coreboot can ask the ME to switch itself off over HECI (Intel's "Soft Temporary
-Disable"). It doesn't touch the flash descriptor and can be undone. The setting is
-a CMOS option.
+Disable"). It doesn't touch the flash descriptor and can be undone. This works
+on the board: the owner disabled it this way on 2026-11-27.
+
+### Variant C (EDK2): setup menu
+
+1. Press Esc at power-on to open the setup.
+2. Open Device Manager, then Platform Setup Menu.
+3. Set "Intel Management Engine" to Disabled.
+4. Save and reset. coreboot sends the request and does a full (global) reset,
+   so the board resets once more by itself.
+
+The option is a UEFI variable in the SMMSTORE flash area. Clearing CMOS doesn't
+change it.
+
+> **Coming from an older C build:** the older build kept the option in CMOS. If you
+> disabled the ME with nvramtool, it stays off on the first boot of the new build.
+> Set the menu option to Disabled during that first boot, or the ME is switched
+> back on (the menu default is Enabled) on the next one.
+
+### Variants A and B (SeaBIOS): CMOS option
 
 1. Build `nvramtool` from the checkout:
    ```bash
@@ -338,19 +356,21 @@ a CMOS option.
    ```bash
    sudo coreboot/util/nvramtool/nvramtool -w me_state=Disable
    ```
-3. Reboot. coreboot sends the request and does a full (global) reset, so the
-   board resets once more by itself.
-4. Check the result:
-   ```bash
-   lspci -s 00:16.0
-   ```
-   No output means the ME interface is gone.
-   ```bash
-   sudo coreboot/util/cbmem/cbmem -c | grep 'ME:'
-   ```
-   The "Current Operation Mode" should no longer be 0.
+3. Reboot. The board resets once more by itself.
 
-- Undo with `me_state=Enable` and a reboot.
-- Clearing CMOS (CLRTC) restores the default (Enable).
-- `me_state_counter` stops retry loops if the ME refuses the change three times.
+Undo with `me_state=Enable` and a reboot. Clearing CMOS (CLRTC) also restores the
+default (Enable).
 
+### Checking the result
+
+```bash
+lspci -s 00:16.0
+```
+No output means the ME interface is gone.
+
+```bash
+sudo coreboot/util/cbmem/cbmem -c | grep 'ME:'
+```
+Expect "Current Operation Mode : 3" (Soft Temporary Disable) and "Error Code : 2".
+
+`me_state_counter` stops retry loops if the ME refuses the change three times.

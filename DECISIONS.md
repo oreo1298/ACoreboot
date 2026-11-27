@@ -394,6 +394,12 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   Disable) and do a global reset. It's the same mechanism asrock/h370m-itx_ac uses
   on this chipset, and it touches nothing in flash.
 - **Default:** Enable. Verify with BRINGUP §9.
+- **Verified on hardware (2026-11-27):** variant C with the CMOS backend,
+  `nvramtool -w me_state=Disable`, then a reboot:
+  - HFSTS1 0x80032044: operation mode 3 (`ME_HFS1_COM_SOFT_TEMP_DISABLE`), error
+    code 2, working state 4.
+  - 00:16.0 is gone from `lspci`.
+  - Capture: `board-data/dumps/coreboot/2026-11-27-C-me_state/`.
 - **Your chip:** if E's descriptor is still on it, it carries the bit-16 change.
   Flash the descriptor back from your backup (BRINGUP §2.3).
 
@@ -430,4 +436,27 @@ Confidence: **H** high (vendor firmware is unambiguous, or Intel docs/spec),
   - GPP_A12 has RXDIS set later in boot, so the pad is fully disabled.
   - Neither is a wrongly driven output. Confirming them needs an `inteltool -G` from
     the vendor BIOS.
+
+## D-034 Variant C: options in the EDK2 setup menu (CFR) — M
+
+- **Why:** the owner looked for the ME switch in the firmware setup.
+  MrChromebox's EDK2 already contains `CfrSetupMenuDxe`, which shows coreboot's CFR
+  forms under Device Manager > Platform Setup Menu.
+- **What the board does:**
+  - Selects `DRIVERS_OPTION_CFR_ENABLED if PAYLOAD_EDK2 && SMMSTORE`, the same as
+    google/drallion, a Comet Lake board on the same SoC code.
+  - `cfr.c` lists only two forms, using coreboot's common objects: System
+    (`me_state`, hidden `me_state_counter`) and Power (`power_on_after_fail`).
+  - No CPU, power-limit or PCIe tuning options are exposed.
+- **Backend per variant:** C sets `USE_UEFI_VARIABLE_STORE` (SMMSTORE). A and B
+  keep the CMOS table and nvramtool.
+- **Power loss:** `POWER_STATE_OFF_AFTER_FAILURE` is set in common.defconfig. The
+  CFR default and the no-option fallback now match the CMOS default (stay off);
+  before, they would have powered on.
+- **Migration note:** a C board that was disabled through CMOS keeps the ME
+  disabled on the first boot of the new image, because coreboot finds no
+  `me_state` variable and does nothing. EDK2 then writes the menu default
+  (Enabled), so the ME comes back on the following boot unless the menu is set to
+  Disabled on that first boot.
+- **Not yet verified on hardware.**
 

@@ -59,8 +59,10 @@ packages with apt or pacman.
 | B | SeaBIOS | FSP GOP (HDMI, DP, VGA) | legacy boot with VGA |
 | C | EDK2 (UEFI) | FSP GOP (HDMI, DP, VGA) | UEFI boot, **tested** |
 
-- **To disable the Intel ME**, set the `me_state` CMOS option (BRINGUP.md §9). It
-  works with any variant and can be undone.
+- **To disable the Intel ME** (verified on the board):
+  - C: setup menu, Device Manager > Platform Setup Menu > Intel Management Engine.
+  - A/B: `nvramtool -w me_state=Disable`.
+  - It can be undone. Details in BRINGUP.md §9.
 - The former D/E "HAP" variants were removed: the ME ran normally with them.
 
 ## Documents

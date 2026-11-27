@@ -60,6 +60,8 @@ restores ./coreboot with the patch series applied.
 - [x] C and E boot on the board (owner). Captures: board-data/dumps/coreboot/2026-11-27-E/
 - [x] Findings applied: DDI E bifurcation, HWM IO1 not assigned, x1 slot labels → RP7/RP8,
       HAP disproved → D/E removed, me_state CMOS option added (DECISIONS D-030..D-033)
-- [ ] Owner: restore own descriptor+GbE from backup (MAC), test me_state=Disable, VGA,
+- [x] me_state=Disable verified on C (CMOS backend): Soft Temporary Disable, HECI hidden
+- [x] C: CFR setup menu (me_state, power_on_after_fail) via UEFI variables (D-034); A/B keep CMOS
+- [ ] Owner: test the C setup menu; restore own descriptor+GbE from backup (MAC), VGA,
       per-slot DIMM test, x1 slot cards, DP, S3 (BRINGUP §6)
 

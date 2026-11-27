@@ -17,6 +17,6 @@ CONFIG_DEFAULT_CONSOLE_LOGLEVEL_7=y
 CONFIG_CONSOLE_CBMEM=y
 # Keep the vendor flash descriptor byte-for-byte (no ifdtool --unlock)
 CONFIG_DO_NOT_TOUCH_DESCRIPTOR_REGION=y
-# Options (debug_level, power_on_after_fail, me_state) live in CMOS; change
-# them with nvramtool. me_state=Disable soft-disables the ME via HECI.
-CONFIG_USE_OPTION_TABLE=y
+# Stay off after a power loss unless the power_on_after_fail option says
+# otherwise (same as the CMOS default in cmos.default).
+CONFIG_POWER_STATE_OFF_AFTER_FAILURE=y

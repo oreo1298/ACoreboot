@@ -4,3 +4,6 @@ CONFIG_EDK2_UEFIPAYLOAD=y
 # CONFIG_MAINBOARD_USE_LIBGFXINIT is not set
 CONFIG_RUN_FSP_GOP=y
 CONFIG_GENERIC_LINEAR_FRAMEBUFFER=y
+# Options (me_state, power_on_after_fail) are UEFI variables in SMMSTORE,
+# shown in EDK2 under Device Manager > Platform Setup Menu (CFR, see cfr.c).
+CONFIG_USE_UEFI_VARIABLE_STORE=y

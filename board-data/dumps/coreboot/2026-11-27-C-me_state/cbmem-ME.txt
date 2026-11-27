@@ -1,0 +1,27 @@
+# Variant C (CMOS option backend), after `nvramtool -w me_state=Disable` and a
+# reboot. Transcribed by hand from the owner's photo of
+# `lspci -s 00:16.0; sudo ./cbmem -c | grep 'ME:'` (lspci printed nothing).
+[DEBUG]  ME: Version: Unavailable
+[DEBUG]  ME: HFSTS1                      : 0x80032044
+[DEBUG]  ME: HFSTS2                      : 0x36280106
+[DEBUG]  ME: HFSTS3                      : 0x00000020
+[DEBUG]  ME: HFSTS4                      : 0x00004800
+[DEBUG]  ME: HFSTS5                      : 0x00000000
+[DEBUG]  ME: HFSTS6                      : 0x40000000
+[DEBUG]  ME: Manufacturing Mode          : NO
+[DEBUG]  ME: SPI Protection Mode Enabled : YES
+[DEBUG]  ME: FW Partition Table          : OK
+[DEBUG]  ME: Bringup Loader Failure      : NO
+[DEBUG]  ME: Firmware Init Complete      : NO
+[DEBUG]  ME: Boot Options Present        : NO
+[DEBUG]  ME: Update In Progress          : NO
+[DEBUG]  ME: D0i3 Support                : YES
+[DEBUG]  ME: Low Power State Enabled     : NO
+[DEBUG]  ME: CPU Replaced                : NO
+[DEBUG]  ME: CPU Replacement Valid       : YES
+[DEBUG]  ME: Current Working State       : 4
+[DEBUG]  ME: Current Operation State     : 1
+[DEBUG]  ME: Current Operation Mode      : 3
+[DEBUG]  ME: Error Code                  : 2
+[DEBUG]  ME: CPU Debug Disabled          : NO
+[DEBUG]  ME: TXT Support                 : NO

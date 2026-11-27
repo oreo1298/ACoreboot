@@ -33,7 +33,10 @@ each value with its source and confidence.
     (keyboard/mouse via a hub on USB2 port 10), HDMI, and all 6 AHCI ports.
   - **The ME still ran normally** (HECI 00:16.0 present, operation mode 0). So
     PCHSTRP0[16] is **not** the HAP bit on CNP-H, and variants D/E were removed. The
-    ME can now be disabled with the `me_state` CMOS option (BRINGUP §9).
+    ME can now be disabled with the `me_state` option (BRINGUP §9).
+  - C with `me_state=Disable` set through nvramtool: ME in Soft Temporary Disable
+    (HFSTS1 0x80032044, mode 3, error 2), and HECI is hidden.
+    Capture: `board-data/dumps/coreboot/2026-11-27-C-me_state/`.
   - **Two issues found and fixed:**
     - i915 warned that DDI E (VGA) had 0 lanes. The board now selects
       `SOC_INTEL_GFX_ENABLE_DDI_E_BIFURCATION`.
@@ -96,7 +99,7 @@ each value with its source and confidence.
 | Other Super I/O LDNs (ACPI, GPIO/WDT, deep sleep, port-80 UART) | left untouched (power-on state) | not exposed by the driver |
 | Fan control / HWM | not implemented (power-on defaults) | safety rule: no vendor fan values |
 | TPM header | not implemented | — |
-| ME disable | `me_state=Disable` CMOS option (HECI soft disable), not yet tested; HAP strap bit tried and **did not work** | coreboot CSE common code |
+| ME disable | `me_state` option (HECI soft disable), **works** (CMOS backend tested). C: setup menu (CFR, untested); A/B: nvramtool. HAP strap bit **did not work** | coreboot CSE common code |
 
 ## Top first-boot risks
 
@@ -124,12 +127,12 @@ Also note:
 From `out/SHA256SUMS`.
 
 ```
-0672e75f00bdab5bcb280f19e0883b704e6acfe9eff28f604e4144508ff0f95d  asus_prime-b360m-c_A_seabios_libgfxinit.rom
-1a328a2d82561567feecce959205bbad0b5744a58b0e4abc86c9a9fc4e283800  asus_prime-b360m-c_B_seabios_fspgop.rom
-8f785e7438ab4b033d4853860bf32798047511e27482041042eac36d53025b11  asus_prime-b360m-c_C_edk2_fspgop.rom
-ba6a14785a42382f905d5996de9423c1a769feeef1383cda3775ac2583e69ed4  asus_prime-b360m-c_A_seabios_libgfxinit.bios-region.bin
-bb9f02adfd710e560ae8f98bce997e6be6a320e025e82833794b628b3308284e  asus_prime-b360m-c_B_seabios_fspgop.bios-region.bin
-f328ccd70643193be594d95650905a7dae532453df1d958365a25c03ec242147  asus_prime-b360m-c_C_edk2_fspgop.bios-region.bin
+4a85c6c09b68626c16cae90d6425de425190735477a2cfda38855c9a616de0ec  asus_prime-b360m-c_A_seabios_libgfxinit.rom
+f4124473556aff92a00d593df7a8ca492393579ac497cf2ddad5178bb62ecbcc  asus_prime-b360m-c_B_seabios_fspgop.rom
+1a21092a20bdff23634a4bdff40426d5eba8476d06cefd0c4e319a51ad8e0c8f  asus_prime-b360m-c_C_edk2_fspgop.rom
+ebdf90861b6b196bd8bc9643d6d2d47354bb7c6363150dfdec251ff2adad8fb9  asus_prime-b360m-c_A_seabios_libgfxinit.bios-region.bin
+d6ce33dc701fdb5e69dfba0dc6ec2c158bef47fc1fd301a78c53e9ed8edc000a  asus_prime-b360m-c_B_seabios_fspgop.bios-region.bin
+b967bef20955186ac09a6464b205ddd5fc5165af6a513714e2821f5c9618033b  asus_prime-b360m-c_C_edk2_fspgop.bios-region.bin
 ```
 
 ## Read first

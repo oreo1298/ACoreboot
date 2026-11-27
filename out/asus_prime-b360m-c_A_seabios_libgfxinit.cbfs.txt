@@ -4,17 +4,17 @@ cbfs_master_header             0x0        cbfs header        32 none
 cpu_microcode_blob.bin         0x80       microcode      424960 none
 intel_fit                      0x67cc0    intel_fit          80 none
 fallback/romstage              0x67d40    stage           74184 none
-fallback/ramstage              0x79f80    stage          142345 LZMA (315748 decompressed)
+fallback/ramstage              0x79f80    stage          142328 LZMA (315748 decompressed)
 vgaroms/seavgabios.bin         0x9cc00    raw             28672 none
-config                         0xa3c40    raw              4231 LZMA (15424 decompressed)
-revision                       0xa4d00    raw               762 none
-build_info                     0xa5040    raw                91 none
-fallback/dsdt.aml              0xa50c0    raw              8677 none
-vbt.bin                        0xa7300    raw              1171 LZMA (4449 decompressed)
-cmos.default                   0xa7800    cmos_default      256 none
-cmos_layout.bin                0xa7940    cmos_layout       776 none
-payload_revision               0xa7c80    raw               237 none
-(empty)                        0xa7dc0    null              484 none
+config                         0xa3c40    raw              4241 LZMA (15431 decompressed)
+revision                       0xa4d40    raw               768 none
+build_info                     0xa5080    raw                91 none
+fallback/dsdt.aml              0xa5100    raw              8677 none
+vbt.bin                        0xa7340    raw              1171 LZMA (4449 decompressed)
+cmos.default                   0xa7840    cmos_default      256 none
+cmos_layout.bin                0xa7980    cmos_layout       776 none
+payload_revision               0xa7cc0    raw               237 none
+(empty)                        0xa7e00    null              420 none
 fspm.bin                       0xa7fc0    fsp            557056 none
 fsps.bin                       0x130000   fsp            179155 LZMA (217088 decompressed)
 fallback/postcar               0x15bc40   stage           24436 none

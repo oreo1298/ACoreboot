@@ -3,3 +3,6 @@ CONFIG_PAYLOAD_SEABIOS=y
 CONFIG_SEABIOS_STABLE=y
 CONFIG_MAINBOARD_USE_LIBGFXINIT=y
 CONFIG_VGA_TEXT_FRAMEBUFFER=y
+# Options (debug_level, power_on_after_fail, me_state) live in CMOS; change
+# them with nvramtool. me_state=Disable soft-disables the ME via HECI.
+CONFIG_USE_OPTION_TABLE=y

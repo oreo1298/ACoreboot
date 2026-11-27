@@ -4,10 +4,10 @@ cbfs_master_header             0x0        cbfs header        32 none
 cpu_microcode_blob.bin         0x80       microcode      424960 none
 intel_fit                      0x67cc0    intel_fit          80 none
 fallback/romstage              0x67d40    stage           74184 none
-fallback/ramstage              0x79f80    stage          122473 LZMA (271936 decompressed)
+fallback/ramstage              0x79f80    stage          122467 LZMA (271936 decompressed)
 vgaroms/seavgabios.bin         0x97e40    raw             28672 none
-config                         0x9ee80    raw              4118 LZMA (15022 decompressed)
-revision                       0x9ff00    raw               762 none
+config                         0x9ee80    raw              4129 LZMA (15029 decompressed)
+revision                       0x9ff00    raw               768 none
 build_info                     0xa0240    raw                91 none
 fallback/dsdt.aml              0xa02c0    raw              8677 none
 vbt.bin                        0xa2500    raw              1171 LZMA (4449 decompressed)
