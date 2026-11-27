@@ -8,7 +8,15 @@ state itself was not read (`intelmetool -b` is on the capture list).
 **Input gap: only the ASUS update capsule (`3202.CAP`) was provided.** There was no SPI
 dump and none of the requested dumps (inteltool, lspci, superiotool, …). Everything
 below comes from the vendor image, the manual or reference boards; DECISIONS.md lists
-each value with its source and confidence. Nothing has run on hardware yet.
+each value with its source and confidence.
+
+**Hardware test log:**
+
+- 2026-11-27: variant C (EDK2 + FSP GOP) flashed first; the owner reports it boots
+  and works. So bootblock → romstage → FSP-M memory init → ramstage → FSP-S → EDK2
+  → OS works with at least one DIMM and the display in use.
+- The per-feature checklist (BRINGUP.md §6) has not been reported yet. Until then
+  the table below still says "unverified".
 
 ## What was built
 
